@@ -43,11 +43,11 @@ def find_linear_continuum(wavflux_arr, temp_obj):
     ***RETURNS the array of wavelength and continuum fluxes.
     '''
     # For Teff lower than 35,000
-    x1 = 1274.63
-    x2 = 1290.42
+    x1 = 1270.3
+    x2 = 1284.5
     # For Teff between 35,000 and 48,000
-    x3 = 1221.76
-    x4 = 1298.58
+    x3 = 1191.8
+    x4 = 1289.8
     # For Teff higher than 48,000
     x5 = 1202.95
     x6 = 1298.58
@@ -63,14 +63,15 @@ def find_linear_continuum(wavflux_arr, temp_obj):
     yb = spectrum.findXinY(wavflux_arr[1], wavflux_arr[0], temp_xb)
     
     # Determine which pair of x points to use according to the spectrum features, that change with temperature
-    if (numpy.fabs(yb) > numpy.fabs(ya)) or (float(temp_obj[4]) > 35000.0) and (float(temp_obj[4]) < 48000.0):
+    if (numpy.fabs(yb) > numpy.fabs(ya)) or (float(temp_obj) > 35000.0) and (float(temp_obj) < 48000.0):
+        #print('(numpy.fabs(yb) > numpy.fabs(ya)) or (float(temp_obj) > 35000.0) and (float(temp_obj) < 48000.0)')
         xa = x3
         xb = x4
         temp_xa, _ = spectrum.find_nearest(wavflux_arr[0], xa)
         temp_xb, _ = spectrum.find_nearest(wavflux_arr[0], xb)
         ya = spectrum.findXinY(wavflux_arr[1], wavflux_arr[0], temp_xa)
         yb = spectrum.findXinY(wavflux_arr[1], wavflux_arr[0], temp_xb)
-    if (float(temp_obj[4]) > 48000.0):
+    if (float(temp_obj) > 48000.0):
         xa = x5
         xb = x6
         temp_xa, _ = spectrum.find_nearest(wavflux_arr[0], xa)
