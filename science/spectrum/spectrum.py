@@ -204,9 +204,11 @@ def rebin_to_desired_rows(arr1, arr2, desired_rows):
         small_arr_shape = arr2_shape
     elif arr2_shape[1] == arr1_shape[1]:
         if arr1_shape[1] > desired_rows:
-            new_factor = float(arr1_shape[1]) / float(desired_rows)
-        else:
+            new_factor = float(desired_rows) / float(arr1_shape[1]) 
+        elif arr1_shape[1] < desired_rows:
             new_factor = float(desired_rows) / float(arr1_shape[1])
+        elif arr1_shape[1] == desired_rows:
+            new_factor = 1.0
         arr1_rebinned = rebin(arr1, (1, new_factor))
         arr2_rebinned = rebin(arr2, (1, new_factor))
         return (arr1_rebinned, arr2_rebinned, new_factor, new_factor)
@@ -235,7 +237,7 @@ def rebin_to_desired_rows(arr1, arr2, desired_rows):
 def rebin_arrays_for_desired_resolution(desired_delta_lambda, line, lines_arr, cont_arr, guessed_rows=500):
     '''In other words this function smoothens the spectra to get the desired desired_delta_lambda.
     Arrays must be numpy arrays.
-    guessed_rows to spped up code in the iterations.'''
+    guessed_rows to speed up code in the iterations.'''
     R_initial = resolving_power(line, lines_arr)
     delta_lambda_initial = line / float(R_initial)
     print('Initial Resolving_power of lines array = %i  ----  Initial delta_lambda = %f' % (R_initial, delta_lambda_initial))
@@ -261,7 +263,7 @@ def rebin_arrays_for_desired_resolution(desired_delta_lambda, line, lines_arr, c
         delta_lambda = line / float(R)
         desired_rows = desired_rows - 1
         #print('Initial Resolving_power = %i  ----  Initial delta_lambda = %f' % (R_initial, delta_lambda_initial))
-        #print('**** R and delta_lambda', R, delta_lambda)
+        #print('**** NEW R and delta_lambda:   %f -- %f' % (R, delta_lambda))
         #print 'Decreasing rows! Started at: %i, now at: %i' % (guessed_rows, desired_rows)
     smoothing_factor = float(R_initial) / float(R)
     #if R_initial >= R:
@@ -275,8 +277,11 @@ def rebin_arrays_for_desired_resolution(desired_delta_lambda, line, lines_arr, c
 
 def rebin_one_arr_to_desired_rows(arr, desired_rows):
     _, rows = arr.shape
-    factor = float(desired_rows) / float(rows)
-    if rows == desired_rows:
+    if rows > desired_rows:    
+        factor = float(desired_rows) / float(rows)
+    elif rows < desired_rows:     
+        factor = float(desired_rows) / float(rows)
+    elif rows == desired_rows:
         factor = 1.0
     rebinned_arr = rebin(arr, (1, factor))
     return (rebinned_arr, factor)
