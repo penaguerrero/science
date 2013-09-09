@@ -2,11 +2,42 @@ import os
 import shutil
 import glob
 import numpy
+import science
 
 from .. import spectrum
 from ..claus import clausfile
 
 def into2cols(path_CMFGEN, path_results, lower_wave, upper_wave, templogg):
+    # Find directory
+    ogrid_dir = glob.glob(path_CMFGEN)
+    files_of_interest = ['cmf_flx', 'obs_cont']    
+    for d in ogrid_dir:
+        dir_name = os.path.join(d, 'obs')
+        files_in_dir = os.listdir(dir_name)
+        #print('Now in %s' % dir_name)
+        for file_in_use in files_of_interest:
+            #print 'this is file_in_use: %s' % file_in_use
+            if file_in_use in files_in_dir:
+                #print('Going into directory: %s' % (dir_name))
+                file_name = os.path.join(dir_name, file_in_use)
+                print('Loading %s' % (file_name))
+                # Converting file into three columns: frequencies, janskies, error
+                science.claus.clausfile(file_name, dest=os.path.join(path_results))
+                # Converting into Angstroms and cgs to create a text file 
+                new_name = os.path.join(path_results, os.path.basename(d)+"_"+os.path.basename(file_in_use)+"_1d")
+                #print 'This is new_name', new_name
+                old_name = os.path.join(path_results, os.path.basename(file_in_use)+"_1d")
+                #print 'This is old_name', old_name
+                sp = science.spectrum.Spectrum(old_name)
+                shutil.move(old_name, new_name)
+                output = (sp.A, sp.cgs)
+                science.spectrum.write_1d(os.path.join(os.path.abspath(path_results), new_name+"_Acgs.txt"), output)
+                os.unlink(new_name)
+                print ('*_Acgs.txt files have been created in the directory: %s' % (path_results))
+            else:
+                print('File %s is NOT in this directory: %s' % (file_in_use, dir_name))
+
+def oldinto2cols(path_CMFGEN, path_results, lower_wave, upper_wave, templogg):
     # Find directory
     ogrid_dir = glob.glob(path_CMFGEN)
     print('Now in %s' % ogrid_dir)
@@ -18,11 +49,11 @@ def into2cols(path_CMFGEN, path_results, lower_wave, upper_wave, templogg):
             file_name = os.path.join(dir_name, file_in_use)
             print('loading %s' % (file_name))
             # Converting file into three columns: frequencies, janskies, error
-            clausfile.clausfile(file_name, dest=os.path.join(path_results))
+            clausfile(file_name, dest=os.path.join(path_results))
             # Converting into Angstroms and cgs to create a text file 
-            new_name = os.path.join(path_results+os.path.basename(dir_name)+"_"+os.path.basename(file_in_use)+"_1d")
-            old_name = os.path.join(path_results+os.path.basename(file_in_use)+"_1d")
-            sp = spectrum.spectrum(old_name)
+            new_name = os.path.join(path_results, os.path.basename(dir_name)+"_"+os.path.basename(file_in_use)+"_1d")
+            old_name = os.path.join(path_results, os.path.basename(file_in_use)+"_1d")
+            sp = spectrum.Spectrum(old_name)
             shutil.move(old_name, new_name)
             #sp.save2(file_in_use+"_Acgs.txt")
             output = (sp.A, sp.cgs)
