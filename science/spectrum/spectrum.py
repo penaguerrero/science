@@ -418,6 +418,15 @@ def EQW_line_fixed(line_arr, line_cont, line, width=10.0):
     return (eqw)
 
 def half_EQW_times2(data_arr, cont_arr, line, wave_limit, right_side=True):
+    '''
+    This function determines half of the EW from the chosen side and then it multiplies it by 2.
+    *** THE DEFINITION OF EQW USED IS POSITIVE FOR EMISSION AND NEGATIVE FOR ABSORPTION
+    # data_arr = data array that contains both wavelength and flux
+    # cont_arr = continuum array that also contains both wavelength and flux
+    # ARRAYS MUST BE SAME DIMENSIONS
+    # line = where the integration should begin
+    # wave_limit = final point of the integration
+    '''
     if right_side == True:
         lower = line
         upper = wave_limit
@@ -750,7 +759,7 @@ def div(tuple1, tuple2):
     CGS = fin[1] / cont[1]
     return numpy.array((A, CGS))
 
-class spectrum:
+class Spectrum:
     def __init__(self, filename):
         numpy.set_printoptions(precision=20, suppress=False, threshold='nan')
         self.filename = filename
