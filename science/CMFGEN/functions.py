@@ -74,13 +74,13 @@ def find_linear_continuum(wavflux_arr, temp_obj):
     ***RETURNS the array of wavelength and continuum fluxes.
     '''
     # For Teff lower than 35,000
-    x1 = 1270.3
-    x2 = 1284.5
+    x1 = 1270.3 #1274.63
+    x2 = 1284.5 #1290.42
     # For Teff between 35,000 and 48,000
-    x3 = 1191.8
-    x4 = 1289.8
+    x3 = 1191.8 #1271.61
+    x4 = 1289.8 #1298.58
     # For Teff higher than 48,000
-    x5 = 1202.95
+    x5 = 1202.95 
     x6 = 1298.58
 
     # Start assuming that Teff is lower than 35,000
@@ -119,3 +119,5 @@ def find_linear_continuum(wavflux_arr, temp_obj):
         y_list.append(y)
     continuum_array = numpy.array([wavflux_arr[0], y_list])
     return continuum_array
+
+
