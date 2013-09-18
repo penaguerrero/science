@@ -8,122 +8,6 @@ from pprint import pprint
 from scipy import stats
 from matplotlib import pyplot
 
-def find_lines_and_loccontinuum(object_spectra, z, nth=5, window_wdith=150, text_table=False):
-    '''
-    This function shifts the object's data to the rest frame (z=0). The function then fits a 
-    loal continuum in a window of x Angstroms, omitting the lines windows (it interpolates 
-    in that region). The lines it looks for are those in the lines2fit.txt file.
-    REQUIREMENTS:
-    # object_spectra must be a 2D numpy array of wavelengths and fluxes
-    # z is expected to be the redshift of the object, must be a float
-    # nth is the order of the polynomial, default is 5
-    # window is the width in which the function will fit the local continuum
-    FUNCTION RETURNS:
-    # 2D numpy array of redshift-corrected wavenegths and fluxes.
-    # the array of lines it found
-    # if asked to (text_table=True), the text table of the lines it found along with the EWs, and 
-    the coefficients found for the nth order polynomial used to fit the continuum. 
-    '''
-    # Bring the object to rest wavelenght frame using 1+z = lambda_obs/lambda_theo - 1
-    w_corr = object_spectra[0] / (z + 1.0)
-    print len(w_corr), len(object_spectra[0])
-    wf = numpy.array([w_corr, object_spectra[1]])
-    
-    # First window
-    w_initial = min(wf[0])
-    window_up, _ = find_nearest(wf[0], w_initial+window_wdith)
-    print 'Window from  %0.2f  to  %0.2f  Angstroms' % (w_initial, window_up)
-    w_win = wf[0][(wf[0] >= w_initial) & (wf[0] <= window_up)]
-    f_win = wf[1][(wf[0] >= w_initial) & (wf[0] <= window_up)]
-    print 'shapes of selected wav and flx arrays: ', numpy.shape(w_win), numpy.shape(f_win)
-    norm_flxs = f_win / 1e-15
-    rounded_fluxes = numpy.around(norm_flxs, decimals=2)
-    #print 'max flux = ', max(rounded_fluxes)
-    #print 'minimum = ', min(rounded_fluxes)
-    #print numpy.shape(norm_flxs), numpy.shape(rounded_fluxes)
-    flux_mode = stats.mode(rounded_fluxes, axis=None)
-    print 'flux mode: ', flux_mode, flux_mode[0]*1e-15, (flux_mode[0]*1e-15)*3.0
-    flux_avg = numpy.average(f_win)
-    print 'flux average ', flux_avg
-    flux_median = numpy.median(f_win)
-    print 'flux median ', flux_median
-    rms = numpy.sqrt(numpy.mean(f_win**2))
-    print 'flux rms', rms
-    trimed_flux = copy.deepcopy(f_win)
-    '''
-    # replace the 5 highest points
-    for j in range(0, 5):
-        print j
-        for i in range(len(trimed_flux)):
-            if trimed_flux[i] == max(trimed_flux):
-                print trimed_flux[i]
-                trimed_flux[i] = flux_mode[0]*1e-15
-            if trimed_flux[i] == min(trimed_flux):
-                print trimed_flux[i]
-                trimed_flux[i] = flux_mode[0]*1e-15
-    '''
-    # remove the fluxes higher or lower than the threshold
-    threshold = (flux_mode[0]*1e-15)*3.0
-    for i in range(len(trimed_flux)):
-        if (trimed_flux[i] > threshold) or (trimed_flux[i] < (threshold*-1)):
-            trimed_flux[i] = flux_mode[0] * 1e-15
-    sig = math.sqrt(abs(sum((trimed_flux - flux_avg)**2 * trimed_flux)/sum(trimed_flux)))
-    print 'sigmas: 1, 2, 3 = ', sig, sig*2, sig*3  
-    # Polynolial of the form y = Ax^5 + Bx^4 + Cx^3 + Dx^2 + Ex + F
-    # y = flux,  x = wavelength
-    coefficients = numpy.polyfit(w_win, trimed_flux, nth)
-    polynomial = numpy.poly1d(coefficients)
-    f_pol = polynomial(w_win)
-    #print polynomial
-    #print f_pol
-    pyplot.plot(w_win, f_win, 'b', w_win, trimed_flux, 'r', w_win, f_pol, 'g')
-    pyplot.show()        
-    
-    # nexts windows
-    end_loop = False
-    while end_loop == False:
-        w_increment = window_up + window_wdith
-        window_lo, _ = find_nearest(wf[0], window_up - 50.0)
-        # make sure that the upper wavelength exists in the array
-        if w_increment <= max(wf[0]):
-            window_up, _ = find_nearest(wf[0], w_increment)
-        else:
-            end_loop = True
-            window_up = max(wf[0])
-        w_win = wf[0][(wf[0] >= window_lo) & (wf[0] <= window_up)]
-        f_win = wf[1][(wf[0] >= window_lo) & (wf[0] <= window_up)]
-        norm_flxs = f_win / 1e-15
-        rounded_fluxes = numpy.around(norm_flxs, decimals=2)
-        print 'max flux = ', max(rounded_fluxes)
-        print 'minimum = ', min(rounded_fluxes)
-        print numpy.shape(norm_flxs), numpy.shape(rounded_fluxes)
-        #for i in range(len(rounded_fluxes)):
-        #    print 'in loop i=%i' % i
-        #    print '%0.2f   %f' % (w_win[i], rounded_fluxes[i])
-        flux_mode = stats.mode(rounded_fluxes, axis=None)
-        print 'flux mode: ', flux_mode, flux_mode[0]*1e-15, (flux_mode[0]*1e-15)*3.0
-        flux_avg = numpy.average(f_win)
-        sig = math.sqrt(abs(sum((f_win - flux_avg)**2 * f_win)/sum(f_win)))
-        print 'sigmas: 1, 2, 3 = ', sig, sig*2, sig*3  
-        print 'flux average ', flux_avg
-        flux_median = numpy.median(f_win)
-        print 'flux median ', flux_median
-        rms = numpy.sqrt(numpy.mean(f_win**2))
-        print 'flux rms', rms
-        trimed_flux = copy.deepcopy(f_win)
-        # remove the fluxes higher or lower than the threshold
-        threshold = (flux_mode[0]*1e-15) * 3.0
-        for i in range(len(trimed_flux)):
-            if (trimed_flux[i] > threshold) or (trimed_flux[i] < (threshold*(-1))):
-                trimed_flux[i] = flux_mode[0] * 1e-15
-        # Polynolial of the form y = Ax^5 + Bx^4 + Cx^3 + Dx^2 + Ex + F
-        coefficients = numpy.polyfit(w_win, trimed_flux, nth)
-        polynomial = numpy.poly1d(coefficients)
-        f_pol = polynomial(w_win)
-        #print polynomial
-        #print f_pol
-        pyplot.plot(w_win, f_win, 'b', w_win, trimed_flux, 'r', w_win, f_pol, 'g')
-        pyplot.show()        
 
 def flux_in_band(w2interp, trimed_flux, wav_and_flux_arr, threshold):
     '''FIND if that w2interp has a corresponding flux WITHIN the threshold band
@@ -214,7 +98,7 @@ def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, n_times_thresold):
     trimed_wav_and_flux_arr = numpy.array([wav_and_flux_arr[0], trimed_flux])
     return trimed_wav_and_flux_arr
 
-def lines_and_entire_continuum(object_spectra, z, nth=5, n_times_thresold=1.0, window_wdith=150, fullspecmode=False, norm=True, text_table=False):
+def fit_continuum(object_spectra, z, nth=5, n_times_thresold=1.0, window_wdith=150, normalize=True):
     '''
     This function shifts the object's data to the rest frame (z=0). The function then fits a 
     continuum to the entire spectrum, omitting the lines windows (it interpolates 
@@ -224,44 +108,57 @@ def lines_and_entire_continuum(object_spectra, z, nth=5, n_times_thresold=1.0, w
     # object_spectra must be a 2D numpy array of wavelengths and fluxes
     # z is expected to be the redshift of the object
     # nth is the order of the polynomial, default is 5
+    # n_times_thresold = the width of the flux band in which to allow interpolation of fluxes
     # window_width = the size of the spectrum window to be analyzed.
-    # fullspecmode is to chose if ONE mode is to be calculated for the whole spectrum
-        * if fullspecmode is set to False the function goes to the default window size: 250 A
+        * The default window size: 150 A but it can be set to take into account the whole spectrum.
     FUNCTION RETURNS:
     # 2D numpy array of redshift-corrected wavenegths and fluxes.
-    # the array of lines it found
-    # if asked to (text_table=True), the text table of the lines it found along with the EWs, and 
-    the coefficients found for the nth order polynomial used to fit the continuum. 
+    # 2D continuum numpy array of wavenegths and fluxes.
     '''
     # Bring the object to rest wavelenght frame using 1+z = lambda_obs/lambda_theo - 1
     w_corr = object_spectra[0] / (1+float(z))
-    #ONE MODE FOR THE WHOLE SPECTRUM
-    if fullspecmode == True:
-        # normalize in order to have easier numbers to work with then round them
-        norm_flxs = object_spectra[1] / 1e-15
-        rounded_fluxes = numpy.around(norm_flxs, decimals=5)
-        flux_mode = stats.mode(rounded_fluxes, axis=None)
-        print flux_mode
-        # remove the fluxes higher or lower than the threshold
-        trimed_flux = copy.deepcopy(object_spectra[1])
-        threshold = (flux_mode[0]*1e-15) * n_times_thresold
-        for i in range(len(trimed_flux)):
-            if (trimed_flux[i] > threshold) or (trimed_flux[i] < (threshold*(-1))):
-                trimed_flux[i] = flux_mode[0] * 1e-15
-        # this is the array to find the continuum with
-        wf = numpy.array([w_corr, trimed_flux])
-    else:
-        #DIVIDE THE SPECTRUM INTO SMALLER WINDOWS TO FIND THE LOCAL MODE
-        # this is the array to find the continuum with
-        corr_wf = numpy.array([w_corr, object_spectra[1]])
-        wf = get_trimed_wavflx_arr(corr_wf, window_wdith, n_times_thresold)
+    #DIVIDE THE SPECTRUM INTO SMALLER WINDOWS TO FIND THE LOCAL MODE
+    # this is the array to find the continuum with
+    corr_wf = numpy.array([w_corr, object_spectra[1]])
+    wf = get_trimed_wavflx_arr(corr_wf, window_wdith, n_times_thresold)
     # Polynolial of the form y = Ax^5 + Bx^4 + Cx^3 + Dx^2 + Ex + F
     coefficients = numpy.polyfit(wf[0], wf[1], nth)
     polynomial = numpy.poly1d(coefficients)
     f_pol = polynomial(wf[0])
-    pyplot.plot(w_corr, object_spectra[1], 'b', wf[0], wf[1], 'r', wf[0], f_pol, 'k')
-    pyplot.show()        
-    print 'Done!'
+    fitted_continuum = numpy.array([wf[0], f_pol])
+    pyplot.plot(w_corr, object_spectra[1], 'k', wf[0], wf[1], 'b', fitted_continuum[0], fitted_continuum[1], 'r')
+    pyplot.show()
+    # Normalize to that continuum if norm=True
+    if normalize == True:
+        norm_flux = object_spectra[1] / f_pol
+        norm_wf = numpy.array([wf[0], norm_flux])
+        # Give the theoretical continuum for the line finding
+        norm_continuum = theo_cont(object_spectra[0])
+        pyplot.plot(norm_wf[0], norm_wf[1], 'b', norm_continuum[0], norm_continuum[1], 'r')
+        pyplot.show()
+        return norm_wf, norm_continuum
+    else:
+        return object_spectra, fitted_continuum
+
+
+def find_lines(object_spectra, continuum, text_table=True, n=0.999271):
+    '''
+    This function takes the object and continuum arrays to find the
+    lines given in the lines2fit.txt file.
+    REQUIREMENTS:
+    # object_spectra must be a 2D numpy array of wavelengths and fluxes
+    # continuum must be a 2D numpy array of wavelengths and fluxes
+    # n = index of refraction
+        * Default n=0.999271 was taken from NIST, 2013.
+    FUNCTION RETURNS:
+    # 2D numpy array of redshift-corrected wavenegths and fluxes.
+    # the array of lines it found
+    # if asked to (text_table=True), the text table of the lines it found along 
+        with the EWs, and the coefficients found for the nth order polynomial 
+        used to fit the continuum.
+    '''
+    
+    pass
 
 def write_1d(filename, data):
     '''filename: file name
