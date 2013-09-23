@@ -126,25 +126,29 @@ def fit_continuum(object_spectra, z, nth=5, n_times_thresold=1.0, window_wdith=1
     polynomial = numpy.poly1d(coefficients)
     f_pol = polynomial(wf[0])
     fitted_continuum = numpy.array([wf[0], f_pol])
-    pyplot.plot(w_corr, object_spectra[1], 'k', wf[0], wf[1], 'b', fitted_continuum[0], fitted_continuum[1], 'r')
-    pyplot.show()
+    pyplot.plot(corr_wf[0], corr_wf[1], 'k', wf[0], wf[1], 'b', fitted_continuum[0], fitted_continuum[1], 'r')
+    #pyplot.show()
     # Normalize to that continuum if norm=True
+    print 'Normalization to continuum was set to ', normalize
     if normalize == True:
         norm_flux = object_spectra[1] / f_pol
         norm_wf = numpy.array([wf[0], norm_flux])
         # Give the theoretical continuum for the line finding
         norm_continuum = theo_cont(object_spectra[0])
         pyplot.plot(norm_wf[0], norm_wf[1], 'b', norm_continuum[0], norm_continuum[1], 'r')
-        pyplot.show()
+        #pyplot.show()
         return norm_wf, norm_continuum
     else:
-        return object_spectra, fitted_continuum
+        return corr_wf, fitted_continuum
 
 
-def find_lines(object_spectra, continuum, text_table=True, n=0.999271):
+def find_lines_info(object_spectra, continuum, text_table=True, n=0.999271):
     '''
     This function takes the object and continuum arrays to find the
-    lines given in the lines2fit.txt file.
+    lines given in the lines_catalog.txt file.
+    *** WARNING:
+        This function assumes that object_spectra has already been 
+        corrected for redshift.
     REQUIREMENTS:
     # object_spectra must be a 2D numpy array of wavelengths and fluxes
     # continuum must be a 2D numpy array of wavelengths and fluxes
@@ -157,8 +161,89 @@ def find_lines(object_spectra, continuum, text_table=True, n=0.999271):
         with the EWs, and the coefficients found for the nth order polynomial 
         used to fit the continuum.
     '''
-    
-    pass
+    # Read the line_catalog file
+    f = open('/Users/gallo/Documents/AptanaStudio3/science/science/spectrum/lines_catalog.txt', 'r')
+    list_rows_of_file = f.readlines()
+    f.close()
+    wavelength = []
+    element = []
+    ion =[]
+    forbidden = []
+    how_forbidden = []
+    transition = []
+    strong_line = []
+    for row in list_rows_of_file:
+        # Disregard comment symbol
+        if '#' not in row:
+            # Split each row into columns
+            data = row.split()
+            # data[0]=wavelength, [1]=element, [2]=ion, [3]=forbidden, 
+            #     [4]=how_forbidden, [5]=transition, [6]=strong_line
+            wavelength.append(float(data[0]))
+            element.append(data[1])
+            ion.append(data[2])
+            forbidden.append(data[3])
+            how_forbidden.append(data[4])
+            transition.append(data[5])
+            strong_line.append(data[6])
+    # If the wavelength is grater than 2900 correct the theoretical air wavelengths to vacuum using
+    # equation:  1-n = w_vac/w_air - 1
+    wavs_vacuum = []
+    for w in wavelength:
+        if w > 2900:
+            wvac = w * (2-n)
+            wavs_vacuum.append(wvac)
+        else:
+            wavs_vacuum.append(w)
+    # Determine the strength of the lines: no=5A, weak=7, medium=13, yes=20, super=30
+    strength = []
+    for sline in strong_line:
+        if sline == 'no':
+            s = 5.0
+        elif sline == 'weak':
+            s = 7.0
+        elif sline == 'medium':
+            s = 13.0
+        elif sline == 'yes':
+            s = 20.0
+        elif sline == 'super':
+            s = 30.0
+        strength.append(s)
+    # Search in the object given for the lines in the lines_catalog
+    lines_catalog = (wavelength, wavs_vacuum, element, ion, forbidden, how_forbidden, transition, strength)
+    intensities_list = []
+    EWs_list = []
+    for i in range(len(lines_catalog[1])):
+        nearest2line = find_nearest_within(object_spectra[0], lines_catalog[1][i], 4)
+        if nearest2line > 0.0:  
+            # If the line is in the object spectra, measure the intensity and equivalent width
+            # according to the strength of the line
+            central_wavelength = object_spectra[0][(object_spectra[0] == nearest2line)]
+            line_strength = lines_catalog[7][(lines_catalog[1] == nearest2line)]
+            lower_wav = central_wavelength - (line_strength/2)
+            upper_wav = central_wavelength + (line_strength/2)
+            I = get_raw_intensity(object_spectra, lower_wav, upper_wav)
+            ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)
+            intensities_list.append(I)
+            EWs_list.append(ew) 
+    for I, ew in zip(intensities_list, EWs_list):
+        print ('{0:>10.4} {1:>20.4}'.format(I, ew))
+
+
+def get_raw_intensity(object_spectra, lower_wav, upper_wav):
+    '''
+    This function finds the integrated intensity of the line given by the lower and upper
+    wavelengths.
+    REQUIREMENTS:
+    # object_spectra = the 2D array of wavelength and flux
+    # lower_wav, upper_wav = limits of integration
+    FUNCTION RETURNS:
+    # the intensity of the integration between lower and upper wavelengths
+    '''
+    I = object_spectra[1][(object_spectra[0] >= lower_wav) & (object_spectra[0] <= upper_wav)]
+    intensity = sum(I)
+    #print object_spectra[0][(object_spectra[0] >= lower_wav) & (object_spectra[0] <= upper_wav)], I
+    return intensity
 
 def write_1d(filename, data):
     '''filename: file name
@@ -294,13 +379,13 @@ def rebinning_interpol(arr1, arr2, reference_wavelength):
     print ('Shape of new "small" array: ', numpy.shape(rebinned_arr_small))    
     return (rebinned_arr_small, factor)
 
-def get_factors_and_rebin(spectrum_arr, continuum_arr, desired_rows=500):
+def get_factors_and_rebin(spectrum_arr, continuum_arr, desired_rows=600):
     '''
-    ### THIS FUNCTIONS DOES EVERYTHING AT ONCE FOR SPECTRA WITH SPECTRA AND CONT ARRAYS OF DIFFERENT DIMENSIONS
+    THIS FUNCTIONS DOES EVERYTHING AT ONCE FOR SPECTRA WITH SPECTRA AND CONT ARRAYS OF DIFFERENT DIMENSIONS
     # spectrum_arr = numpy array of wavelength and flux
     # continuum_arr = numpy array of wavelength and flux
     # desired_rows = number of lines for output file, by default it is 600
-    # THIS FUNCTION RETURNS: 
+    THIS FUNCTION RETURNS: 
     #     rebinned_line_array, 
     #     rebinned_continuum_array, 
     #     and the factors by which each one has been decreased/increased: 
@@ -370,11 +455,15 @@ def rebin_to_desired_rows(arr1, arr2, desired_rows):
         big_arr_factor = float(desired_rows) / float(big_arr_shape[1])
     elif big_arr_shape[1] < desired_rows:
         big_arr_factor = float(big_arr_shape[1]) / float(desired_rows)
-        
+    elif big_arr_shape[1] == desired_rows:
+        big_arr_factor = 1.0
+    
     if small_arr_shape[1] > desired_rows:
         small_arr_factor = float(desired_rows) / float(small_arr_shape[1])
     elif small_arr_shape[1] < desired_rows:
         small_arr_factor = float(desired_rows) / float(small_arr_shape[1])
+    elif small_arr_factor[1] == desired_rows:
+        small_arr_factor = 1.0
     
     #print('big_arr_factor = %f   ---   small_arr_factor = %f' % (big_arr_factor, small_arr_factor))
     big_arr_rebinned = rebin(big_arr, (1, big_arr_factor))
@@ -474,6 +563,21 @@ def find_nearest(arr, value):
     '''
     idx=(numpy.abs(arr-value)).argmin()
     return arr[idx], idx
+
+
+def find_nearest_within(arr, value, threshold):
+    '''
+    This function gives the content in the array of the number that is closest to 
+    the value given, within threshold away from value.
+    '''
+    half_thres = threshold / 2.0
+    choped_arr = arr[(arr >= value-half_thres) & (arr <= value+half_thres)]
+    if len(choped_arr) == 0:
+        return 0.0
+    diff = numpy.fabs(choped_arr - value)
+    diff_min = min(diff)
+    return float(choped_arr[diff==diff_min])
+
 
 def closest(thelist, value) :
     '''
@@ -621,26 +725,39 @@ def EQW(data_arr, cont_arr, lower, upper):
     #width = uplim - lolim
     #print('Actual width = %f' % (width))
     # Finding the line arrays to use in the integration
-    wavelength, flux = selection(data_arr[0, :], data_arr[1, :], lolim, uplim)
-    _, flux_cont = selection(cont_arr[0, :], cont_arr[1, :], lolim, uplim)
+    wavelength, flux = selection(data_arr[0], data_arr[1], lolim, uplim)
+    w_cont, flux_cont = selection(cont_arr[0], cont_arr[1], lolim, uplim)
+    # Interpolate if the flux selection array is empty 
+    if len(flux_cont) == 0:
+        x_list = []
+        y_list = []
+        for i in range(len(flux)):
+            x = wavelength[i]
+            y = numpy.interp(x, cont_arr[0], cont_arr[1])
+            x_list.append(x)
+            y_list.append(y)
+        w_cont = numpy.array(x_list)
+        flux_cont = numpy.array(y_list)
     # In case arrays do not have the exact same wavelengths, I am removing the second to last element
     # so that the width remains the same.
-    if len(flux) > len(flux_cont):
-        wavelength = numpy.delete(wavelength, wavelength[len(wavelength)-2])
-        flux = numpy.delete(flux, flux[len(flux)-2])
-    elif len(flux) < len(flux_cont):       
-        flux_cont = numpy.delete(flux_cont, flux_cont[len(flux_cont)-2])
+    object_selection = numpy.array([wavelength, flux])
+    continuum_selection = numpy.array([w_cont, flux_cont])
+    rows = len(wavelength)
+    object_selection, continuum_selection, _, _ = rebin_to_desired_rows(object_selection, continuum_selection, rows)
+    w = object_selection[0]
+    f = object_selection[1]
+    f_cont = continuum_selection[1]
     # Finding the average step for the integral
-    N = len(wavelength)
+    N = len(w)
     i = 0
     diffs_list = []
     for j in range(1, N):
-        point_difference = wavelength[j] - wavelength[i]
+        point_difference = w[j] - w[i]
         diffs_list.append(point_difference)
         i = i + 1
     dlambda = sum(diffs_list) / float(N)
     # Actually solving the eqw integral
-    difference = 1 - (flux / flux_cont)
+    difference = 1 - (f / f_cont)
     eqw = sum(difference) * dlambda * (-1)   # the -1 is because of the definition of EQW    
     return (eqw, lolim, uplim)
 
@@ -857,6 +974,8 @@ def factor_newshape(continuum_arr, lineintensity_arr, lineintensity_factor, desi
     percent = 1.00
     oldshape = lineintensity_arr.shape
     newshape = lineintensity_arr.shape
+    new_lineintensity_factor = lineintensity_factor * percent
+    continuum_arr_shape = continuum_arr.shape
     while percent > 0.00:
         if newshape[1] == desired_rows:
             break
@@ -867,7 +986,7 @@ def factor_newshape(continuum_arr, lineintensity_arr, lineintensity_factor, desi
         continuum_arr_shape = continuum_arr.shape
     new_continuum_factor = (oldshape[1] * new_lineintensity_factor) / continuum_arr_shape[1]
     #print("Percent: %f  Newshape: %s  New Line Intensity Factor: %f" % (percent, newshape, new_lineintensity_factor))
-    print(newshape)
+    #print(newshape)
     return(new_continuum_factor, new_lineintensity_factor)
 
 def same_rebin_factor(arr1, arr2):
@@ -885,13 +1004,14 @@ def same_rebin_factor(arr1, arr2):
         small_arr = arr1
     elif arr1_shape[1] == arr2_shape[1]:
         factor_same = temp_factor_same
-        print 'Arrays are the same dimensions. Factor is 1.0'
+        #print 'Arrays are the same dimensions. Factor is 1.0'
         return factor_same
     small_arr_columns, small_arr_rows = numpy.shape(small_arr)
     big_arr_columns, big_arr_rows = numpy.shape(big_arr)
     # The number of colums in the small array has to be equal to the columns in line big array
     if big_arr_columns != small_arr_columns:
         raise ValueError('Number of columns in files do not match')
+    #print big_arr_rows, small_arr_rows
     factor_same = (big_arr_rows/small_arr_rows)**0.5 
     return factor_same
 
@@ -900,6 +1020,7 @@ def get_factor_lineintensity(continuum_arr, lineintensity_arr):
     factor_same = same_rebin_factor(continuum_arr, lineintensity_arr)
     _, continuum_rows = continuum_arr.shape
     lineintensity_columns, lineintensity_rows = lineintensity_arr.shape
+    #print continuum_arr.shape, lineintensity_arr.shape
     factor_lineintensity = (continuum_rows * factor_same) / lineintensity_rows
     return (lineintensity_columns, factor_lineintensity)
 
