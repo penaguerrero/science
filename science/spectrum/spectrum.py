@@ -13,10 +13,50 @@ def flux_in_band(w2interp, trimed_flux, wav_and_flux_arr, threshold):
     '''FIND if that w2interp has a corresponding flux WITHIN the threshold band
     RETURNS TRUE or FALSE'''
     flux_in_band = False
-    if (wav_and_flux_arr[1][(wav_and_flux_arr[0] == w2interp)] < threshold) and (wav_and_flux_arr[1][(wav_and_flux_arr[0] == w2interp)] > (threshold*-1)):
+    threshold_fraction = threshold / 2.0
+    threshold_up = threshold + threshold_fraction
+    threshold_down = threshold - threshold_fraction
+    if (wav_and_flux_arr[1][(wav_and_flux_arr[0] == w2interp)] < threshold_up) and (wav_and_flux_arr[1][(wav_and_flux_arr[0] == w2interp)] > threshold_down):
         flux_in_band = True
     return flux_in_band
     
+def return_trimed_arrs(original_wav_and_flux_arr, trimed_arr):
+    '''
+    This function returns the 150 A trimed of each side in order to create a good flux band for the
+    continuum fit.
+    # Function retunrs the trimed array extrapolated to the same length and with the same wavelengths
+        as the original.
+    '''
+    # Find the limits not to exceed the length of the original array.
+    _, i = find_nearest(original_wav_and_flux_arr[0], trimed_arr[0][0])
+    lolim = original_wav_and_flux_arr[0][i-1]
+    _, i = find_nearest(original_wav_and_flux_arr[0], trimed_arr[0][len(trimed_arr[0])-1])
+    uplim = original_wav_and_flux_arr[0][i+1]
+    # generate the arrays with the wavelengths to use for the extrapolation
+    wavs2extrapolate_left = original_wav_and_flux_arr[0][(original_wav_and_flux_arr[0] <= lolim)]
+    wavs2extrapolate_right = original_wav_and_flux_arr[0][(original_wav_and_flux_arr[0] >= uplim)]
+    left_flxs = []
+    for w in wavs2extrapolate_left:
+        f = numpy.interp(w, trimed_arr[0], trimed_arr[1])
+        left_flxs.append(f)
+    right_flxs = []
+    for w in wavs2extrapolate_right:
+        f = numpy.interp(w, trimed_arr[0], trimed_arr[1])
+        right_flxs.append(f)
+    full_sigma_clipped_wavs = []
+    full_sigma_clipped_flxs = []
+    for w, f in zip(wavs2extrapolate_left, left_flxs):
+        full_sigma_clipped_wavs.append(w)
+        full_sigma_clipped_flxs.append(f)
+    for w, f in zip(trimed_arr[0], trimed_arr[1]):
+        full_sigma_clipped_wavs.append(w)
+        full_sigma_clipped_flxs.append(f)
+    for w, f in zip(wavs2extrapolate_right, right_flxs):
+        full_sigma_clipped_wavs.append(w)
+        full_sigma_clipped_flxs.append(f)
+    full_sigma_clipped_arr = numpy.array([full_sigma_clipped_wavs, full_sigma_clipped_flxs])
+    return full_sigma_clipped_arr
+
 def interp_flx_in_band(wav_and_flux_arr, threshold):
     '''
     This function interpolates the fluxes within the desiderd band.
@@ -26,30 +66,57 @@ def interp_flx_in_band(wav_and_flux_arr, threshold):
     FUNCTION RETURNS:
     # the flux array of the interpolated fluxes within the band
     '''
-    trimed_flux = copy.deepcopy(wav_and_flux_arr[1])
+    # The band is given by the  
+    threshold_fraction = threshold / 2.0
+    threshold_up = threshold + threshold
+    threshold_down = threshold - threshold
+    temp_wavs = copy.deepcopy(wav_and_flux_arr[0])
+    temp_flux = copy.deepcopy(wav_and_flux_arr[1])
+    # To avoid the edges at the beginning and at the end of the arrays: roughly 150 Angstroms
+    trimed_wavs = temp_wavs[(temp_wavs >= temp_wavs[0]+150) & (temp_wavs <= temp_wavs[len(temp_wavs)-1]-150)]
+    trimed_flux = temp_flux[(temp_wavs >= temp_wavs[0]+150) & (temp_wavs <= temp_wavs[len(temp_wavs)-1]-150)]
+    trimed_wf_arr = numpy.array([trimed_wavs, trimed_flux]) 
+    sigma_clipped_flux = []
     for i in range(len(trimed_flux)):
         # if flux is OUTSIDE threshold band
-        if (trimed_flux[i] > threshold) or (trimed_flux[i] < (threshold*-1)):
+        '''
+        if (trimed_flux[i] > threshold_up):
+            sigma_clipped_flux.append(threshold_up)
+        elif (trimed_flux[i] < threshold_down):
+            sigma_clipped_flux.append(threshold_down)            
+            '''           
+        if (trimed_flux[i] > threshold_up) or (trimed_flux[i] < threshold_down):
             search_w2interp = True
             increment = 2.0
             # find the wavelength to do the flux interpolation
-            w2interp, _ = find_nearest(wav_and_flux_arr[0], wav_and_flux_arr[0][i]+increment)
-            #print wav_and_flux_arr[0][i], w2interp
-            # if that wavelength has a corresponding flux WITHIN the threshold band do interpolation
-            flx_within = flux_in_band(w2interp, trimed_flux, wav_and_flux_arr, threshold)
+            w2interp, _ = find_nearest(trimed_wf_arr[0], trimed_wf_arr[0][i]+increment)
+            # if that wavelength has a corresponding flux WITHIN the threshold band (flx_within=True),
+            #    do interpolation in the while loop:
+            flx_within = flux_in_band(w2interp, trimed_flux, trimed_wf_arr, threshold)
             while search_w2interp:
-                if w2interp == wav_and_flux_arr[0][len(trimed_flux)-1]:
+                if w2interp == trimed_wf_arr[0][len(trimed_flux)-1]:
+                    sigma_clipped_flux.append(trimed_flux[i])
+                    #print 'got to end of array, old flux: %e  at %f, appended threshold: %e' % (trimed_flux[i], w2interp, threshold)
                     break
                 if flx_within == True:
                     search_w2interp = False
-                    trimed_flux[i] = numpy.interp(w2interp, wav_and_flux_arr[0], wav_and_flux_arr[1])
-                    #print w2interp, wav_and_flux_arr[1][(wav_and_flux_arr[0] == w2interp)], threshold, search_w2interp
+                    interp_flux = numpy.interp(w2interp, trimed_wf_arr[0], trimed_wf_arr[1])
+                    sigma_clipped_flux.append(interp_flux)
+                    #print w2interp, trimed_wf_arr[1][(trimed_wf_arr[0] == w2interp)], threshold, search_w2interp
+                    #print 'got it, new flux: %e  at %f. Threshold: %e' % (interp_flux, w2interp, threshold)
                 else:
-                    w2interp, _ = find_nearest(wav_and_flux_arr[0], wav_and_flux_arr[0][i]+increment)
-                    flx_within = flux_in_band(w2interp, trimed_flux, wav_and_flux_arr, threshold)
+                    w2interp, _ = find_nearest(trimed_wf_arr[0], trimed_wf_arr[0][i]+increment)
+                    flx_within = flux_in_band(w2interp, trimed_flux, trimed_wf_arr, threshold)
+                    #print 'flux %e of %f was outside of threshold: %e' % (trimed_flux[i], w2interp, threshold)
                     increment = increment + 2.0
-                    #print len(trimed_flux), i, wav_and_flux_arr[0][i], w2interp
-    return trimed_flux
+             
+        else:
+            #print 'flux %e  inside of band: threshold_down %e to threshold_up %e' % (trimed_flux[i],threshold_down,threshold_up )
+            sigma_clipped_flux.append(trimed_flux[i])
+    # Now extrapolate for the 150 A removed from each side of the edges
+    trimed_arr = numpy.array([trimed_wavs, sigma_clipped_flux])
+    full_sigma_clipped_arr = return_trimed_arrs(wav_and_flux_arr, trimed_arr)
+    return full_sigma_clipped_arr[1]
 
 def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, n_times_thresold):
     '''
@@ -66,14 +133,26 @@ def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, n_times_thresold):
     window_lo = min(wav_and_flux_arr[0])    
     window_up, _ = find_nearest(wav_and_flux_arr[0], window_lo+window_wdith)
     #print 'Window from  %0.2f  to  %0.2f  Angstroms' % (window_lo, window_up)
+    #w_win = wav_and_flux_arr[0][(wav_and_flux_arr[0] >= window_lo) & (wav_and_flux_arr[0] <= window_up)]
     f_win = wav_and_flux_arr[1][(wav_and_flux_arr[0] >= window_lo) & (wav_and_flux_arr[0] <= window_up)]
-    norm_flxs = f_win / 1e-15
-    rounded_fluxes = numpy.around(norm_flxs, decimals=2)
+    normalize2 = 1e-16
+    norm_flxs = f_win / normalize2
+    decimals = 2
+    rounded_fluxes = numpy.around(norm_flxs, decimals)
     flux_mode = stats.mode(rounded_fluxes, axis=None)
-    #print 'flux mode: ', flux_mode, flux_mode[0]*1e-15, (flux_mode[0]*1e-15)*3.0  
+    print 'wavelength window: ', window_lo, window_up
+    print 'flux mode: ', flux_mode, flux_mode[0]*normalize2, (flux_mode[0]*normalize2)*n_times_thresold 
     # Remove the fluxes higher or lower than the threshold
-    local_threshold = (flux_mode[0]*1e-15)*n_times_thresold
+    local_threshold = (flux_mode[0]*normalize2)*n_times_thresold
+    
+    if local_threshold == 0.0:
+        local_threshold = numpy.median(rounded_fluxes)*normalize2
+        print 'the local_threshold was the median: %e' % (local_threshold)
+    else:
+        print 'this is the local_threshold: %e' % (local_threshold)
+    
     trimed_flux = interp_flx_in_band(wav_and_flux_arr, local_threshold)
+    #raw_input()
     # Nexts windows
     end_loop = False
     while end_loop == False:
@@ -85,13 +164,24 @@ def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, n_times_thresold):
         else:
             end_loop = True
             window_up = max(wav_and_flux_arr[0])
-        #print 'Window from  %0.2f  to  %0.2f  Angstroms' % (window_lo, window_up)
+        print 'Window from  %0.2f  to  %0.2f  Angstroms' % (window_lo, window_up)
+        #raw_input()
         f_win = wav_and_flux_arr[1][(wav_and_flux_arr[0] >= window_lo) & (wav_and_flux_arr[0] <= window_up)]
-        norm_flxs = f_win / 1e-15
-        rounded_fluxes = numpy.around(norm_flxs, decimals=2)
+        norm_flxs = f_win / normalize2
+        print 'got window fluxes and normalized them!'
+        rounded_fluxes = numpy.around(norm_flxs, decimals)
         flux_mode = stats.mode(rounded_fluxes, axis=None)
-        #print 'flux mode: ', flux_mode, flux_mode[0]*1e-15, (flux_mode[0]*1e-15)*3.0   
-        local_threshold = (flux_mode[0]*1e-15)*n_times_thresold
+        print 'flux mode: ', flux_mode, flux_mode[0]*normalize2, n_times_thresold, (flux_mode[0]*normalize2)*n_times_thresold   
+        local_threshold = (flux_mode[0]*normalize2)*n_times_thresold
+        '''
+        if local_threshold == 0.0:
+            local_threshold = numpy.median(rounded_fluxes)*normalize2
+            print 'the local_threshold was the median: %e' % (local_threshold)
+            #raw_input()
+        else:
+            print 'this is the local_threshold: %e' % (local_threshold)
+            #raw_input()
+        '''
         local_trimed_flux = interp_flx_in_band(wav_and_flux_arr, local_threshold)
         numpy.append(trimed_flux, local_trimed_flux)    
     # Create the wavelength and trimed fluxes array
@@ -115,6 +205,7 @@ def fit_continuum(object_spectra, z, nth=5, n_times_thresold=1.0, window_wdith=1
     # 2D numpy array of redshift-corrected wavenegths and fluxes.
     # 2D continuum numpy array of wavenegths and fluxes.
     '''
+    print 'Calculating continuum...'
     # Bring the object to rest wavelenght frame using 1+z = lambda_obs/lambda_theo - 1
     w_corr = object_spectra[0] / (1+float(z))
     #DIVIDE THE SPECTRUM INTO SMALLER WINDOWS TO FIND THE LOCAL MODE
@@ -127,22 +218,22 @@ def fit_continuum(object_spectra, z, nth=5, n_times_thresold=1.0, window_wdith=1
     f_pol = polynomial(wf[0])
     fitted_continuum = numpy.array([wf[0], f_pol])
     pyplot.plot(corr_wf[0], corr_wf[1], 'k', wf[0], wf[1], 'b', fitted_continuum[0], fitted_continuum[1], 'r')
-    #pyplot.show()
+    pyplot.show()
     # Normalize to that continuum if norm=True
-    print 'Normalization to continuum was set to ', normalize
+    print 'Continuum calculated. Normalization to continuum was set to ', normalize
     if normalize == True:
         norm_flux = object_spectra[1] / f_pol
         norm_wf = numpy.array([wf[0], norm_flux])
         # Give the theoretical continuum for the line finding
         norm_continuum = theo_cont(object_spectra[0])
         pyplot.plot(norm_wf[0], norm_wf[1], 'b', norm_continuum[0], norm_continuum[1], 'r')
-        #pyplot.show()
+        pyplot.show()
         return norm_wf, norm_continuum
     else:
         return corr_wf, fitted_continuum
 
 
-def find_lines_info(object_spectra, continuum, text_table=True, n=0.999271):
+def find_lines_info(object_spectra, continuum, vacuum=False, text_table=False, n=0.999271):
     '''
     This function takes the object and continuum arrays to find the
     lines given in the lines_catalog.txt file.
@@ -152,14 +243,17 @@ def find_lines_info(object_spectra, continuum, text_table=True, n=0.999271):
     REQUIREMENTS:
     # object_spectra must be a 2D numpy array of wavelengths and fluxes
     # continuum must be a 2D numpy array of wavelengths and fluxes
+    # vacuum allows to choose to use either air (vacuum=False) or vacuum wavelengths (vacuum=True)
     # n = index of refraction
         * Default n=0.999271 was taken from NIST, 2013.
     FUNCTION RETURNS:
-    # 2D numpy array of redshift-corrected wavenegths and fluxes.
-    # the array of lines it found
-    # if asked to (text_table=True), the text table of the lines it found along 
-        with the EWs, and the coefficients found for the nth order polynomial 
-        used to fit the continuum.
+    # catalog_wavs_found = the list of lines it found from the catalog.
+    # central_wavelength_list = the list of lines it found in the object spectra
+    # width_list = the list of widths of the lines
+    # net_fluxes_list = the sum of the fluxes over the line width
+    # continuum_list = the average continuum value over the line width
+    # EWs_list = the list of EWs it calculated
+    # if text_table=True a text file containing all this information
     '''
     # Read the line_catalog file
     f = open('/Users/gallo/Documents/AptanaStudio3/science/science/spectrum/lines_catalog.txt', 'r')
@@ -196,54 +290,85 @@ def find_lines_info(object_spectra, continuum, text_table=True, n=0.999271):
         else:
             wavs_vacuum.append(w)
     # Determine the strength of the lines: no=5A, weak=7, medium=13, yes=20, super=30
-    strength = []
+    width = []
     for sline in strong_line:
-        if sline == 'no':
+        if sline == "no":
             s = 5.0
-        elif sline == 'weak':
+        elif sline == "weak":
             s = 7.0
-        elif sline == 'medium':
+        elif sline == "medium":
             s = 13.0
-        elif sline == 'yes':
+        elif sline == "yes":
             s = 20.0
-        elif sline == 'super':
+        elif sline == "super":
             s = 30.0
-        strength.append(s)
+        width.append(s)
     # Search in the object given for the lines in the lines_catalog
-    lines_catalog = (wavelength, wavs_vacuum, element, ion, forbidden, how_forbidden, transition, strength)
-    intensities_list = []
+    lines_catalog = (wavelength, wavs_vacuum, element, ion, forbidden, how_forbidden, transition, width)
+    net_fluxes_list = []
     EWs_list = []
-    for i in range(len(lines_catalog[1])):
-        nearest2line = find_nearest_within(object_spectra[0], lines_catalog[1][i], 4)
+    central_wavelength_list =[]
+    catalog_wavs_found = []
+    continuum_list =[]
+    width_list = []
+    # but choose the right wavelength column
+    if vacuum == True:
+        use_wavs = 1
+        use_wavs_text = '# Used only vacuum wavelengths to find lines from line_catalog.txt'
+    else:
+        use_wavs = 0
+        use_wavs_text = '# Used vacuum and air wavelengths (from 2900A) to find lines from line_catalog.txt'
+    #print use_wavs_text
+    for i in range(len(lines_catalog[0])):
+        # find the line in the catalog that is closest to a 
+        nearest2line = find_nearest_within(object_spectra[0], lines_catalog[use_wavs][i], 3)
         if nearest2line > 0.0:  
+            catalog_wavs_found.append(lines_catalog[use_wavs][i])
             # If the line is in the object spectra, measure the intensity and equivalent width
             # according to the strength of the line
             central_wavelength = object_spectra[0][(object_spectra[0] == nearest2line)]
-            line_strength = lines_catalog[7][(lines_catalog[1] == nearest2line)]
-            lower_wav = central_wavelength - (line_strength/2)
-            upper_wav = central_wavelength + (line_strength/2)
-            I = get_raw_intensity(object_spectra, lower_wav, upper_wav)
+            central_wavelength_list.append(float(central_wavelength))
+            line_width = lines_catalog[7][i]
+            lower_wav = central_wavelength - (line_width/2)
+            upper_wav = central_wavelength + (line_width/2)
+            width_list.append(line_width)
+            F, C = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav)
             ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)
-            intensities_list.append(I)
+            continuum_list.append(float(C))
+            net_fluxes_list.append(F)
             EWs_list.append(ew) 
-    for I, ew in zip(intensities_list, EWs_list):
-        print ('{0:>10.4} {1:>20.4}'.format(I, ew))
+    # Create the table of Net Fluxes and EQWs
+    if text_table == True:
+        file_name = raw_input('Please type name of the .txt file containing the line info. Use the full path.')
+        txt_file = open(file_name, 'w+')
+        print >> txt_file,  use_wavs_text
+        print >> txt_file,   '# Positive EW = emission        Negative EW = absorption' 
+        print >> txt_file,   'Catalog WL    Observed WL  Width[A]    Flux [cgs]      Continuum [cgs]    EW [A]'
+        for cw, w, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list):
+            #print ('{0:=6}    {1:>6}    {2:>4}    {3:>0.3}'.format(cw, w, F, ew))
+            print >> txt_file, ('%0.2f        %0.2f       %i        %0.3e        %0.3e        %0.3f' % (cw, w, s, F, C, ew))   
+        txt_file.close()
+        print 'File writen!'
+    return catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list
 
-
-def get_raw_intensity(object_spectra, lower_wav, upper_wav):
+def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav):
     '''
-    This function finds the integrated intensity of the line given by the lower and upper
+    This function finds the integrated flux of the line given by the lower and upper
     wavelengths.
     REQUIREMENTS:
     # object_spectra = the 2D array of wavelength and flux
+    # continuum = the 2D array of wavelength and flux for the continuum
     # lower_wav, upper_wav = limits of integration
     FUNCTION RETURNS:
-    # the intensity of the integration between lower and upper wavelengths
+    # the net flux and corresponding continuum of the integration between lower and upper wavelengths
     '''
-    I = object_spectra[1][(object_spectra[0] >= lower_wav) & (object_spectra[0] <= upper_wav)]
-    intensity = sum(I)
-    #print object_spectra[0][(object_spectra[0] >= lower_wav) & (object_spectra[0] <= upper_wav)], I
-    return intensity
+    net_flux = object_spectra[1][(object_spectra[0] >= lower_wav) & (object_spectra[0] <= upper_wav)]
+    F = sum(net_flux)
+    #print object_spectra[0][(object_spectra[0] >= lower_wav) & (object_spectra[0] <= upper_wav)], F
+    net_continua = continuum[1][(continuum[0] >= lower_wav) & (continuum[0] <= upper_wav)]
+    C = sum(net_continua) / len(net_continua)
+    #C = numpy.median(net_continua)
+    return F, C
 
 def write_1d(filename, data):
     '''filename: file name
@@ -256,6 +381,48 @@ def write_1d(filename, data):
         print("%s: %s" % (filename, e.strerror))
         return False
     return True
+
+def extrapolate_arr2value(wav_and_flux_arr, wav, left=True):
+    '''
+    This function extrapolates the array from left/right to value.
+    # wav_and_flux_arr = 2D array of wavelengths and fluxes
+    # value = the wavelength we want to extraplotate to
+    # left = True  will make the extrapolation go towards lower wavelengths
+           = False  will extrapolate to higher wavelengths
+    Function returns extrapolated 2D array. 
+    '''
+    last_flux_point = numpy.interp(wav, wav_and_flux_arr[0], wav_and_flux_arr[1])
+    diff = numpy.fabs(numpy.fabs(wav) - numpy.fabs(wav_and_flux_arr[0][0]))
+    new_wavs = []
+    new_flux = []
+    increment = 2.0
+    if left == True:
+        inter_wav = wav_and_flux_arr[0][0] - increment
+    elif left == False:
+        inter_wav = wav_and_flux_arr[0][len(wav_and_flux_arr[0])-1] + increment 
+    while diff > 0.5:
+        #print 'inter_wav', inter_wav      
+        if left == True:
+            inter_wav = inter_wav - increment
+            if inter_wav < wav:
+                inter_wav = wav 
+                new_flux_point = numpy.interp(inter_wav, wav_and_flux_arr[0], wav_and_flux_arr[1])
+                break
+        if left == False:
+            inter_wav = inter_wav + increment
+            if inter_wav > wav: 
+                inter_wav = wav 
+                new_flux_point = numpy.interp(inter_wav, wav_and_flux_arr[0], wav_and_flux_arr[1])
+                break            
+        new_flux_point = numpy.interp(inter_wav, wav_and_flux_arr[0], wav_and_flux_arr[1])
+        new_flux.append(new_flux_point)
+        new_wavs.append(inter_wav)
+        diff = numpy.fabs(numpy.fabs(wav) - numpy.fabs(inter_wav))
+    new_flux.append(last_flux_point)
+    new_wavs.append(wav)
+    #print 'wav, last_wav', wav, inter_wav
+    new_arr = numpy.array([new_wavs, new_flux])
+    return new_arr
 
 def rebin(arr, factor):
     ''' arr: array-like tuple
