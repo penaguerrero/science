@@ -7,6 +7,7 @@ from scipy import ndimage
 from pprint import pprint
 from scipy import stats
 from matplotlib import pyplot
+from numba import autojit
 
 
 def return_trimed_arrs(original_wav_and_flux_arr, trimed_arr):
@@ -46,6 +47,7 @@ def return_trimed_arrs(original_wav_and_flux_arr, trimed_arr):
     full_sigma_clipped_arr = numpy.array([full_sigma_clipped_wavs, full_sigma_clipped_flxs])
     return full_sigma_clipped_arr
 
+
 def flux_in_band(w2interp, trimed_flux, wav_and_flux_arr, threshold_up, threshold_down):
     '''FIND if that w2interp has a corresponding flux WITHIN the threshold band
     RETURNS TRUE or FALSE'''
@@ -53,8 +55,9 @@ def flux_in_band(w2interp, trimed_flux, wav_and_flux_arr, threshold_up, threshol
     if (wav_and_flux_arr[1][(wav_and_flux_arr[0] == w2interp)] < threshold_up) and (wav_and_flux_arr[1][(wav_and_flux_arr[0] == w2interp)] > threshold_down):
         flux_in_band = True
     return flux_in_band
-    
-def interp_flx_in_band(wav_and_flux_arr, threshold):
+
+#@autojit
+def interp_flx_in_band(wav_and_flux_arr, threshold, threshold_fraction):
     '''
     This function interpolates the fluxes within the desiderd band.
     REQUIREMENTS:
@@ -64,18 +67,17 @@ def interp_flx_in_band(wav_and_flux_arr, threshold):
     # the flux array of the interpolated fluxes within the band
     '''
     # The band is given by the  
-    threshold_fraction = numpy.fabs(threshold) #/ 2.0
-    threshold_up = numpy.fabs(threshold) + threshold_fraction
-    threshold_down = numpy.fabs(threshold) * (-1)
-
+    threshold_up = numpy.fabs(threshold*2)*threshold_fraction
+    threshold_down = numpy.fabs(threshold*threshold_fraction) * (-1)
+    
     trimed_wavs = copy.deepcopy(wav_and_flux_arr[0])
     trimed_flux = copy.deepcopy(wav_and_flux_arr[1])
     '''
     temp_wavs = copy.deepcopy(wav_and_flux_arr[0])
     temp_flux = copy.deepcopy(wav_and_flux_arr[1])
     # To avoid the edges at the beginning and at the end of the arrays: roughly 150 Angstroms
-    #trimed_wavs = temp_wavs[(temp_wavs >= temp_wavs[0]+150) & (temp_wavs <= temp_wavs[len(temp_wavs)-1]-150)]
-    #trimed_flux = temp_flux[(temp_wavs >= temp_wavs[0]+150) & (temp_wavs <= temp_wavs[len(temp_wavs)-1]-150)]
+    trimed_wavs = temp_wavs[(temp_wavs >= temp_wavs[0]+150) & (temp_wavs <= temp_wavs[len(temp_wavs)-1]-150)]
+    trimed_flux = temp_flux[(temp_wavs >= temp_wavs[0]+150) & (temp_wavs <= temp_wavs[len(temp_wavs)-1]-150)]
     trimed_wf_arr = numpy.array([trimed_wavs, trimed_flux]) 
     '''
     sigma_clipped_flux = []
@@ -127,14 +129,14 @@ def interp_flx_in_band(wav_and_flux_arr, threshold):
     trimed_arr = numpy.array([trimed_wavs, sigma_clipped_flux])
     return trimed_arr[1]
 
-def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, n_times_thresold):
+def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, thresold_fraction):
     '''
     This function gets the windows of the window_width variable size in order to find the
     flux mode of that window.
     REQUIREMENTS:
     # wav_and_flux_arr = The 2D array of wavelemgth and flux.
     # window_width = the size of the spectrum window to be analyzed.
-    # n_times_thresold = the width of the flux band in which to allow interpolation
+    # thresold_fraction = the width of the flux band in which to allow interpolation
     FUNCTION RETURNS:
     # The 2D wavelength and trimed flux array
     '''
@@ -150,18 +152,18 @@ def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, n_times_thresold):
     rounded_fluxes = numpy.around(norm_flxs, decimals)
     flux_mode = stats.mode(rounded_fluxes, axis=None)
     print 'wavelength window: ', window_lo, window_up
-    print 'flux mode: ', flux_mode, flux_mode[0]*normalize2, (flux_mode[0]*normalize2)*n_times_thresold 
+    print 'flux mode: ', flux_mode, flux_mode[0]*normalize2,
+    print 'thresold_fraction', thresold_fraction
+    print 'flux_mode = threshold*thresold_fraction = ',  (flux_mode[0]*normalize2)*thresold_fraction
     # Remove the fluxes higher or lower than the threshold
-    local_threshold = (flux_mode[0]*normalize2)*n_times_thresold
-    
+    local_threshold = (flux_mode[0]*normalize2)
+    # Make sure that the edges do not take the continuum to zero
     if local_threshold <= 0.0:
         local_threshold = numpy.median(rounded_fluxes)*normalize2
         print 'the local_threshold was the median: %e' % (local_threshold)
     else:
         print 'this is the local_threshold: %e' % (local_threshold)
-    
-    trimed_flux = interp_flx_in_band(wav_and_flux_arr, local_threshold)
-    #raw_input()
+    trimed_flux = interp_flx_in_band(wav_and_flux_arr, local_threshold, thresold_fraction)
     # Nexts windows
     end_loop = False
     while end_loop == False:
@@ -174,30 +176,20 @@ def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, n_times_thresold):
             end_loop = True
             window_up = max(wav_and_flux_arr[0])
         print 'Window from  %0.2f  to  %0.2f  Angstroms' % (window_lo, window_up)
-        #raw_input()
         f_win = wav_and_flux_arr[1][(wav_and_flux_arr[0] >= window_lo) & (wav_and_flux_arr[0] <= window_up)]
         norm_flxs = f_win / normalize2
         print 'got window fluxes and normalized them!'
         rounded_fluxes = numpy.around(norm_flxs, decimals)
         flux_mode = stats.mode(rounded_fluxes, axis=None)
-        print 'flux mode: ', flux_mode, flux_mode[0]*normalize2, n_times_thresold, (flux_mode[0]*normalize2)*n_times_thresold   
-        local_threshold = (flux_mode[0]*normalize2)*n_times_thresold
-        '''
-        if local_threshold == 0.0:
-            local_threshold = numpy.median(rounded_fluxes)*normalize2
-            print 'the local_threshold was the median: %e' % (local_threshold)
-            #raw_input()
-        else:
-            print 'this is the local_threshold: %e' % (local_threshold)
-            #raw_input()
-        '''
-        local_trimed_flux = interp_flx_in_band(wav_and_flux_arr, local_threshold)
+        print 'flux mode, thresold_fraction, flux_mode*thresold_fraction: ', flux_mode, flux_mode[0]*normalize2, thresold_fraction, (flux_mode[0]*normalize2)*thresold_fraction   
+        local_threshold = (flux_mode[0]*normalize2)
+        local_trimed_flux = interp_flx_in_band(wav_and_flux_arr, local_threshold, thresold_fraction)
         numpy.append(trimed_flux, local_trimed_flux)    
     # Create the wavelength and trimed fluxes array
     trimed_wav_and_flux_arr = numpy.array([wav_and_flux_arr[0], trimed_flux])
     return trimed_wav_and_flux_arr
 
-def fit_continuum(object_spectra, z, nth=5, n_times_thresold=1.0, window_wdith=150, normalize=True):
+def fit_continuum(object_spectra, z, nth=5, thresold_fraction=1.0, window_wdith=150, normalize=True):
     '''
     This function shifts the object's data to the rest frame (z=0). The function then fits a 
     continuum to the entire spectrum, omitting the lines windows (it interpolates 
@@ -207,7 +199,8 @@ def fit_continuum(object_spectra, z, nth=5, n_times_thresold=1.0, window_wdith=1
     # object_spectra must be a 2D numpy array of wavelengths and fluxes
     # z is expected to be the redshift of the object
     # nth is the order of the polynomial, default is 5
-    # n_times_thresold = the width of the flux band in which to allow interpolation of fluxes
+    # thresold_fraction = freaction (percentage) to multiply the threshold. This modifies the width
+                          of the flux band in which to allow interpolation of fluxes
     # window_width = the size of the spectrum window to be analyzed.
         * The default window size: 150 A but it can be set to take into account the whole spectrum.
     FUNCTION RETURNS:
@@ -220,7 +213,7 @@ def fit_continuum(object_spectra, z, nth=5, n_times_thresold=1.0, window_wdith=1
     #DIVIDE THE SPECTRUM INTO SMALLER WINDOWS TO FIND THE LOCAL MODE
     # this is the array to find the continuum with
     corr_wf = numpy.array([w_corr, object_spectra[1]])
-    wf = get_trimed_wavflx_arr(corr_wf, window_wdith, n_times_thresold)
+    wf = get_trimed_wavflx_arr(corr_wf, window_wdith, thresold_fraction)
     # Polynolial of the form y = Ax^5 + Bx^4 + Cx^3 + Dx^2 + Ex + F
     coefficients = numpy.polyfit(wf[0], wf[1], nth)
     polynomial = numpy.poly1d(coefficients)
