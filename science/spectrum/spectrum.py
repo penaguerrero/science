@@ -7,57 +7,12 @@ from scipy import ndimage
 from pprint import pprint
 from scipy import stats
 from matplotlib import pyplot
-from numba import autojit
-
-
-def return_trimed_arrs(original_wav_and_flux_arr, trimed_arr):
-    '''
-    This function returns the 150 A trimed of each side in order to create a good flux band for the
-    continuum fit.
-    # Function retunrs the trimed array extrapolated to the same length and with the same wavelengths
-        as the original.
-    '''
-    # Find the limits not to exceed the length of the original array.
-    _, i = find_nearest(original_wav_and_flux_arr[0], trimed_arr[0][0])
-    lolim = original_wav_and_flux_arr[0][i-1]
-    _, i = find_nearest(original_wav_and_flux_arr[0], trimed_arr[0][len(trimed_arr[0])-1])
-    uplim = original_wav_and_flux_arr[0][i+1]
-    # generate the arrays with the wavelengths to use for the extrapolation
-    wavs2extrapolate_left = original_wav_and_flux_arr[0][(original_wav_and_flux_arr[0] <= lolim)]
-    wavs2extrapolate_right = original_wav_and_flux_arr[0][(original_wav_and_flux_arr[0] >= uplim)]
-    left_flxs = []
-    for w in wavs2extrapolate_left:
-        f = numpy.interp(w, trimed_arr[0], trimed_arr[1])
-        left_flxs.append(f)
-    right_flxs = []
-    for w in wavs2extrapolate_right:
-        f = numpy.interp(w, trimed_arr[0], trimed_arr[1])
-        right_flxs.append(f)
-    full_sigma_clipped_wavs = []
-    full_sigma_clipped_flxs = []
-    for w, f in zip(wavs2extrapolate_left, left_flxs):
-        full_sigma_clipped_wavs.append(w)
-        full_sigma_clipped_flxs.append(f)
-    for w, f in zip(trimed_arr[0], trimed_arr[1]):
-        full_sigma_clipped_wavs.append(w)
-        full_sigma_clipped_flxs.append(f)
-    for w, f in zip(wavs2extrapolate_right, right_flxs):
-        full_sigma_clipped_wavs.append(w)
-        full_sigma_clipped_flxs.append(f)
-    full_sigma_clipped_arr = numpy.array([full_sigma_clipped_wavs, full_sigma_clipped_flxs])
-    return full_sigma_clipped_arr
-
-
-def flux_in_band(w2interp, trimed_flux, wav_and_flux_arr, threshold_up, threshold_down):
-    '''FIND if that w2interp has a corresponding flux WITHIN the threshold band
-    RETURNS TRUE or FALSE'''
-    flux_in_band = False
-    if (wav_and_flux_arr[1][(wav_and_flux_arr[0] == w2interp)] < threshold_up) and (wav_and_flux_arr[1][(wav_and_flux_arr[0] == w2interp)] > threshold_down):
-        flux_in_band = True
-    return flux_in_band
+#from numba import autojit
 
 #@autojit
-def interp_flx_in_band(wav_and_flux_arr, threshold, threshold_fraction):
+############################################################################################
+# FITTING A CONTINUUM WITH SIGMA-CLIPPING
+def get_sigma_clipped_flux(wav_and_flux_arr, threshold, threshold_fraction):
     '''
     This function interpolates the fluxes within the desiderd band.
     REQUIREMENTS:
@@ -67,23 +22,12 @@ def interp_flx_in_band(wav_and_flux_arr, threshold, threshold_fraction):
     # the flux array of the interpolated fluxes within the band
     '''
     # The band is given by the  
-    threshold_up = numpy.fabs(threshold*2)*threshold_fraction
+    threshold_up = numpy.fabs(threshold*2) * threshold_fraction
     threshold_down = numpy.fabs(threshold*threshold_fraction) * (-1)
-    
-    trimed_wavs = copy.deepcopy(wav_and_flux_arr[0])
     trimed_flux = copy.deepcopy(wav_and_flux_arr[1])
-    '''
-    temp_wavs = copy.deepcopy(wav_and_flux_arr[0])
-    temp_flux = copy.deepcopy(wav_and_flux_arr[1])
-    # To avoid the edges at the beginning and at the end of the arrays: roughly 150 Angstroms
-    trimed_wavs = temp_wavs[(temp_wavs >= temp_wavs[0]+150) & (temp_wavs <= temp_wavs[len(temp_wavs)-1]-150)]
-    trimed_flux = temp_flux[(temp_wavs >= temp_wavs[0]+150) & (temp_wavs <= temp_wavs[len(temp_wavs)-1]-150)]
-    trimed_wf_arr = numpy.array([trimed_wavs, trimed_flux]) 
-    '''
     sigma_clipped_flux = []
     for i in range(len(trimed_flux)):
         # if flux is OUTSIDE threshold band
-        
         if (trimed_flux[i] > threshold_up):
             sigma_clipped_flux.append(threshold_up)
         elif (trimed_flux[i] < threshold_down):
@@ -91,43 +35,7 @@ def interp_flx_in_band(wav_and_flux_arr, threshold, threshold_fraction):
         else:
             #print 'flux %e  inside of band: threshold_down %e to threshold_up %e' % (trimed_flux[i],threshold_down,threshold_up )
             sigma_clipped_flux.append(trimed_flux[i])            
-        '''           
-        if (trimed_flux[i] > threshold_up) or (trimed_flux[i] < threshold_down):
-            search_w2interp = True
-            increment = 2.0
-            # find the wavelength to do the flux interpolation
-            w2interp, _ = find_nearest(trimed_wf_arr[0], trimed_wf_arr[0][i]+increment)
-            # if that wavelength has a corresponding flux WITHIN the threshold band (flx_within=True),
-            #    do interpolation in the while loop:
-            flx_within = flux_in_band(w2interp, trimed_flux, trimed_wf_arr, threshold_up, threshold_down)
-            while search_w2interp:
-                if w2interp == trimed_wf_arr[0][len(trimed_flux)-1]:
-                    sigma_clipped_flux.append(trimed_flux[i])
-                    #print 'got to end of array, old flux: %e  at %f, appended threshold: %e' % (trimed_flux[i], w2interp, threshold)
-                    break
-                if flx_within == True:
-                    search_w2interp = False
-                    interp_flux = numpy.interp(w2interp, trimed_wf_arr[0], trimed_wf_arr[1])
-                    sigma_clipped_flux.append(interp_flux)
-                    #print w2interp, trimed_wf_arr[1][(trimed_wf_arr[0] == w2interp)], threshold, search_w2interp
-                    #print 'got it, new flux: %e  at %f. Threshold: %e' % (interp_flux, w2interp, threshold)
-                else:
-                    w2interp, _ = find_nearest(trimed_wf_arr[0], trimed_wf_arr[0][i]+increment)
-                    flx_within = flux_in_band(w2interp, trimed_flux, trimed_wf_arr, threshold_up, threshold_down)
-                    #print 'flux %e of %f was outside of threshold: %e' % (trimed_flux[i], w2interp, threshold)
-                    increment = increment + 2.0
-        else:
-            #print 'flux %e  inside of band: threshold_down %e to threshold_up %e' % (trimed_flux[i],threshold_down,threshold_up )
-            sigma_clipped_flux.append(trimed_flux[i])
-       
-    # Now extrapolate for the 150 A removed from each side of the edges
-    trimed_arr = numpy.array([trimed_wavs, sigma_clipped_flux])
-    full_sigma_clipped_arr = return_trimed_arrs(wav_and_flux_arr, trimed_arr)
-    return full_sigma_clipped_arr[1]
-    '''
-    # Now extrapolate for the 150 A removed from each side of the edges
-    trimed_arr = numpy.array([trimed_wavs, sigma_clipped_flux])
-    return trimed_arr[1]
+    return sigma_clipped_flux
 
 def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, thresold_fraction):
     '''
@@ -143,27 +51,25 @@ def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, thresold_fraction):
     # First window
     window_lo = min(wav_and_flux_arr[0])    
     window_up, _ = find_nearest(wav_and_flux_arr[0], window_lo+window_wdith)
-    #print 'Window from  %0.2f  to  %0.2f  Angstroms' % (window_lo, window_up)
-    #w_win = wav_and_flux_arr[0][(wav_and_flux_arr[0] >= window_lo) & (wav_and_flux_arr[0] <= window_up)]
+    print 'Window from  %0.2f  to  %0.2f  Angstroms' % (window_lo, window_up)
     f_win = wav_and_flux_arr[1][(wav_and_flux_arr[0] >= window_lo) & (wav_and_flux_arr[0] <= window_up)]
     normalize2 = 1e-16
     norm_flxs = f_win / normalize2
     decimals = 2
     rounded_fluxes = numpy.around(norm_flxs, decimals)
     flux_mode = stats.mode(rounded_fluxes, axis=None)
-    print 'wavelength window: ', window_lo, window_up
-    print 'flux mode: ', flux_mode, flux_mode[0]*normalize2,
+    print 'flux mode: ', flux_mode, flux_mode[0] * normalize2,
     print 'thresold_fraction', thresold_fraction
-    print 'flux_mode = threshold*thresold_fraction = ',  (flux_mode[0]*normalize2)*thresold_fraction
+    print 'flux_mode = threshold*thresold_fraction = ',  (flux_mode[0]*normalize2) * thresold_fraction
     # Remove the fluxes higher or lower than the threshold
-    local_threshold = (flux_mode[0]*normalize2)
+    local_threshold = flux_mode[0] * normalize2
     # Make sure that the edges do not take the continuum to zero
     if local_threshold <= 0.0:
         local_threshold = numpy.median(rounded_fluxes)*normalize2
         print 'the local_threshold was the median: %e' % (local_threshold)
     else:
         print 'this is the local_threshold: %e' % (local_threshold)
-    trimed_flux = interp_flx_in_band(wav_and_flux_arr, local_threshold, thresold_fraction)
+    trimed_flux = get_sigma_clipped_flux(wav_and_flux_arr, local_threshold, thresold_fraction)
     # Nexts windows
     end_loop = False
     while end_loop == False:
@@ -182,8 +88,8 @@ def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, thresold_fraction):
         rounded_fluxes = numpy.around(norm_flxs, decimals)
         flux_mode = stats.mode(rounded_fluxes, axis=None)
         print 'flux mode, thresold_fraction, flux_mode*thresold_fraction: ', flux_mode, flux_mode[0]*normalize2, thresold_fraction, (flux_mode[0]*normalize2)*thresold_fraction   
-        local_threshold = (flux_mode[0]*normalize2)
-        local_trimed_flux = interp_flx_in_band(wav_and_flux_arr, local_threshold, thresold_fraction)
+        local_threshold = flux_mode[0] * normalize2
+        local_trimed_flux = get_sigma_clipped_flux(wav_and_flux_arr, local_threshold, thresold_fraction)
         numpy.append(trimed_flux, local_trimed_flux)    
     # Create the wavelength and trimed fluxes array
     trimed_wav_and_flux_arr = numpy.array([wav_and_flux_arr[0], trimed_flux])
@@ -234,7 +140,8 @@ def fit_continuum(object_spectra, z, nth=5, thresold_fraction=1.0, window_wdith=
     else:
         return corr_wf, fitted_continuum
 
-
+############################################################################################
+# LINE INFORMATION
 def find_lines_info(object_spectra, continuum, vacuum=False, text_table=False, n=0.999271):
     '''
     This function takes the object and continuum arrays to find the
@@ -369,405 +276,8 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav):
     #print object_spectra[0][(object_spectra[0] >= lower_wav) & (object_spectra[0] <= upper_wav)], F
     net_continua = continuum[1][(continuum[0] >= lower_wav) & (continuum[0] <= upper_wav)]
     C = sum(net_continua) / len(net_continua)
-    #C = numpy.median(net_continua)
+    #C = numpy.median(net_continua) gives the same as the average value
     return F, C
-
-def write_1d(filename, data):
-    '''filename: file name
-    data: tuple of values'''
-    try:
-        print("Writing 1d file: %s" % (filename))
-        output = numpy.column_stack((data))
-        numpy.savetxt(filename, output, delimiter=' ')
-    except IOError as e:
-        print("%s: %s" % (filename, e.strerror))
-        return False
-    return True
-
-def extrapolate_arr2value(wav_and_flux_arr, wav, left=True):
-    '''
-    This function extrapolates the array from left/right to value.
-    # wav_and_flux_arr = 2D array of wavelengths and fluxes
-    # value = the wavelength we want to extraplotate to
-    # left = True  will make the extrapolation go towards lower wavelengths
-           = False  will extrapolate to higher wavelengths
-    Function returns extrapolated 2D array. 
-    '''
-    last_flux_point = numpy.interp(wav, wav_and_flux_arr[0], wav_and_flux_arr[1])
-    diff = numpy.fabs(numpy.fabs(wav) - numpy.fabs(wav_and_flux_arr[0][0]))
-    new_wavs = []
-    new_flux = []
-    increment = 2.0
-    if left == True:
-        inter_wav = wav_and_flux_arr[0][0] - increment
-    elif left == False:
-        inter_wav = wav_and_flux_arr[0][len(wav_and_flux_arr[0])-1] + increment 
-    while diff > 0.5:
-        #print 'inter_wav', inter_wav      
-        if left == True:
-            inter_wav = inter_wav - increment
-            if inter_wav < wav:
-                inter_wav = wav 
-                new_flux_point = numpy.interp(inter_wav, wav_and_flux_arr[0], wav_and_flux_arr[1])
-                break
-        if left == False:
-            inter_wav = inter_wav + increment
-            if inter_wav > wav: 
-                inter_wav = wav 
-                new_flux_point = numpy.interp(inter_wav, wav_and_flux_arr[0], wav_and_flux_arr[1])
-                break            
-        new_flux_point = numpy.interp(inter_wav, wav_and_flux_arr[0], wav_and_flux_arr[1])
-        new_flux.append(new_flux_point)
-        new_wavs.append(inter_wav)
-        diff = numpy.fabs(numpy.fabs(wav) - numpy.fabs(inter_wav))
-    new_flux.append(last_flux_point)
-    new_wavs.append(wav)
-    #print 'wav, last_wav', wav, inter_wav
-    new_arr = numpy.array([new_wavs, new_flux])
-    return new_arr
-
-def rebin(arr, factor):
-    ''' arr: array-like tuple
-    factor: rebin_factor tuple
-    *** A cubic spline function is used for performing the interpolation in the zoom function'''
-    return ndimage.interpolation.zoom(arr, factor, order=1)
-
-def correct_rebin(arr1, arr2):
-    ''' Sometimes there is a less line in the resulting rebinned arrays. This function corrects for that.
-    - Both arrays have to have the ONE dimension
-    - Deleting the second element in each array (not the first so that the width remains the same)
-    - The axis in which delete is 0, meaning the entire row.
-    - THIS FUNCTION RETURNS:
-                            2 arrays of same shape '''
-    N_arr1 = len(arr1[0,:])
-    N_arr2 = len(arr2[0,:])
-    if N_arr1 > N_arr2:
-        new_point_x = arr2[0,N_arr2-2] + 0.5
-        new_point_y = numpy.interp(new_point_x, arr2[0,:], arr2[1,:])
-        arr2_x = numpy.insert(arr2[0,:], N_arr2-2, new_point_x)
-        arr2_y = numpy.insert(arr2[1,:], N_arr2-2, new_point_y)
-        arr2 = numpy.array([arr2_x, arr2_y])
-    elif N_arr1 < N_arr2:
-        new_point_x = arr1[0,N_arr1-2]+0.5
-        new_point_y = numpy.interp(new_point_x, arr1[0,:], arr1[1,:])
-        arr1_x = numpy.insert(arr1[0,:], N_arr1-2, new_point_x)
-        arr1_y = numpy.insert(arr1[1,:], N_arr1-2, new_point_y)
-        arr1 = numpy.array([arr1_x, arr1_y])
-    return(arr1, arr2)
-    
-def insert_point_left(arr, reference_wavelength):
-    ''' this is a two dimensional numpy array. '''
-    px1, idx_px1 = find_nearest(arr[0,:], reference_wavelength)
-    idx_px2 = idx_px1 - 1
-    px2 = arr[0,idx_px2]
-    px3 = midpoint(px1, px2)
-    py3 = numpy.interp(px3, arr[0,:], arr[1,:])
-    new_arrX = numpy.insert(arr[0,:], idx_px2, px3)
-    new_arrY = numpy.insert(arr[1,:], idx_px2, py3)
-    new_arr = numpy.array([new_arrX, new_arrY])
-    new_reference_wavelength = arr[0, idx_px2]
-    return (new_arr, new_reference_wavelength)
-
-def insert_point_right(arr, reference_wavelength):
-    ''' this is a two dimensional numpy array. '''
-    px1, idx_px1 = find_nearest(arr[0,:], reference_wavelength)
-    idx_px2 = idx_px1 + 1
-    px2 = arr[0,idx_px2]
-    px3 = midpoint(px1, px2)
-    py3 = numpy.interp(px3, arr[0,:], arr[1,:])
-    new_arrX = numpy.insert(arr[0,:], idx_px2, px3)
-    new_arrY = numpy.insert(arr[1,:], idx_px2, py3)
-    new_arr = numpy.array([new_arrX, new_arrY])
-    new_reference_wavelength = arr[0, idx_px2]
-    return (new_arr, new_reference_wavelength)
-
-def just_rebin_interpol(arr, factor, reference_wavelength):
-    '''
-    arr is a numpy array of wavelength and flux.
-    This function returns a numpy array of the same shape as arr.
-    '''
-    _, rows =  numpy.shape(arr)
-    desired_arr_rows = rows * factor
-    new_arr, new_reference_wavelength = insert_point_left(arr, reference_wavelength)
-    _, new_arr_rows = numpy.shape(new_arr)
-    count_points = 1
-    while new_arr_rows != desired_arr_rows:
-        if count_points%2==0:
-            new_arr, new_reference_wavelength = insert_point_right(new_arr, new_reference_wavelength)
-            _, new_arr_rows = numpy.shape(new_arr)
-            count_points = count_points + 1
-        else:
-            new_arr, new_reference_wavelength = insert_point_left(new_arr, new_reference_wavelength)
-            _, new_arr_rows = numpy.shape(new_arr)
-            count_points = count_points + 1
-        #print ('desired number of rows: ', desired_arr_rows)
-        #print ('new shape so far is: ', numpy.shape(new_arr))
-    return (new_arr)
-
-def smoothTriangle(data, degree, dropVals=False):
-    """performs moving triangle smoothing with a variable degree."""
-    """note that if dropVals is False, output length will be identical
-    to input length, but with copies of data at the flanking regions"""
-    triangle = numpy.array(range(degree) + [degree] + range(degree)[::-1]) + 1
-    smoothed = []
-    for i in range(degree, len(data) - degree * 2):
-        point = data[i:i + len(triangle)] * triangle
-        smoothed.append(sum(point) / sum(triangle))
-    if dropVals: return smoothed
-    smoothed = [smoothed[0]] * (degree + degree / 2) + smoothed
-    while len(smoothed) < len(data):smoothed.append(smoothed[-1])
-    return smoothed
-
-def rebinning_interpol(arr1, arr2, reference_wavelength):
-    '''
-    - Both arrays are two dimensional arrays: Shapes should be the same, length can be different.
-    - The reference_wavelength is from where to start adding points to the small array.
-    - Use this function when arrays of lines and continuum are not the same length.
-    - This function interpolates the smaller data set to make it the same as the big one.
-    #### THIS FUNCTION RETURNS: the rebinned array and the corresponding factor.
-    '''
-    _, rows1 = numpy.shape(arr1)
-    _, rows2 = numpy.shape(arr2)
-    rows_arr1 = float(rows1)
-    rows_arr2 = float(rows2)
-    if rows_arr1 < rows_arr2:
-        arr_small = arr1
-        arr_big = arr2
-        factor = (rows_arr2 ) / rows_arr1
-    elif rows_arr1 > rows_arr2:
-        arr_small = arr2
-        arr_big = arr1
-        factor = (rows_arr1 ) / rows_arr2
-    elif rows_arr1 == rows_arr2:
-        print 'No need to use this function. Use the "just_rebin_interpol" function with the same factor for both arrays.'
-        exit()
-    print ('Shape of big array: ', numpy.shape(arr_big))
-    print ('Shape of small array: ', numpy.shape(arr_small))    
-    print('Interpolating...')
-    rebinned_arr_small = just_rebin_interpol(arr_small, factor, reference_wavelength)
-    print ('Shape of new "small" array: ', numpy.shape(rebinned_arr_small))    
-    return (rebinned_arr_small, factor)
-
-def get_factors_and_rebin(spectrum_arr, continuum_arr, desired_rows=600):
-    '''
-    THIS FUNCTIONS DOES EVERYTHING AT ONCE FOR SPECTRA WITH SPECTRA AND CONT ARRAYS OF DIFFERENT DIMENSIONS
-    # spectrum_arr = numpy array of wavelength and flux
-    # continuum_arr = numpy array of wavelength and flux
-    # desired_rows = number of lines for output file, by default it is 600
-    THIS FUNCTION RETURNS: 
-    #     rebinned_line_array, 
-    #     rebinned_continuum_array, 
-    #     and the factors by which each one has been decreased/increased: 
-    #         new_continuum_factor, 
-    #         new_lineintensity_factor
-    '''
-    # the next two functions return a tuple for columns and rows
-    spec_factors = get_factor_lineintensity(continuum_arr, spectrum_arr) 
-    cont_factors = get_factor_continuum(continuum_arr, spectrum_arr)
-    shape_line = spectrum_arr.shape
-    shape_cont = continuum_arr.shape
-    if shape_line[1] > shape_cont[1]:
-        factors = spec_factors
-    elif shape_line[1] < shape_cont[1]:
-        factors = cont_factors
-    elif shape_line[1] == shape_cont[1]:
-        factors = spec_factors
-    # using those factors so that the number of rows is the same 
-    ### USING factor_newshape function
-    new_continuum_factor, new_lineintensity_factor = factor_newshape(continuum_arr, spectrum_arr, factors[1], desired_rows)    
-    rebin_line = rebin(spectrum_arr, (1, new_lineintensity_factor))    
-    rebin_cont = rebin(continuum_arr, (1, new_continuum_factor))
-    return rebin_line, rebin_cont, new_continuum_factor, new_lineintensity_factor
-
-def resolving_power(line, arr):
-    '''This function determines the resolving power R at the line wavelength.
-    # arr must be a numpy array of wavelength and flux. '''
-    closest_line, idxline = find_nearest(arr[0,:], line)
-    new_delta_lambda = closest_line - arr[0, idxline-1]
-    Resolution = int(line / new_delta_lambda)
-    return (Resolution)
-
-def rebin_to_desired_rows(arr1, arr2, desired_rows):
-    '''This function simply finds the rebinned new arrays with the zoom function.
-    both arrays have to be in form of wavelength and flux numpy arrays.
-    THIS FUNCTION RETURNS:
-        - rebinned arr1
-        - rebinned arr2
-        - rebinning factor of arr1
-        - rebinning factor of arr2
-    '''
-    arr1_shape = numpy.shape(arr1)
-    arr2_shape = numpy.shape(arr2)
-    #print('Shapes of arrays: lines = %s  and  continuum = %s' % (repr(arr1_shape), repr(arr2_shape)))
-    if arr1_shape[1] > arr2_shape[1]:
-        big_arr = arr1
-        big_arr_shape = arr1_shape
-        small_arr = arr2
-        small_arr_shape = arr2_shape
-    elif arr2_shape[1] > arr1_shape[1]:
-        big_arr = arr1
-        big_arr_shape = arr1_shape
-        small_arr = arr2
-        small_arr_shape = arr2_shape
-    elif arr2_shape[1] == arr1_shape[1]:
-        if arr1_shape[1] > desired_rows:
-            new_factor = float(desired_rows) / float(arr1_shape[1]) 
-        elif arr1_shape[1] < desired_rows:
-            new_factor = float(desired_rows) / float(arr1_shape[1])
-        elif arr1_shape[1] == desired_rows:
-            new_factor = 1.0
-        arr1_rebinned = rebin(arr1, (1, new_factor))
-        arr2_rebinned = rebin(arr2, (1, new_factor))
-        return (arr1_rebinned, arr2_rebinned, new_factor, new_factor)
- 
-    if big_arr_shape[1] > desired_rows:
-        big_arr_factor = float(desired_rows) / float(big_arr_shape[1])
-    elif big_arr_shape[1] < desired_rows:
-        big_arr_factor = float(big_arr_shape[1]) / float(desired_rows)
-    elif big_arr_shape[1] == desired_rows:
-        big_arr_factor = 1.0
-    
-    if small_arr_shape[1] > desired_rows:
-        small_arr_factor = float(desired_rows) / float(small_arr_shape[1])
-    elif small_arr_shape[1] < desired_rows:
-        small_arr_factor = float(desired_rows) / float(small_arr_shape[1])
-    elif small_arr_factor[1] == desired_rows:
-        small_arr_factor = 1.0
-    
-    #print('big_arr_factor = %f   ---   small_arr_factor = %f' % (big_arr_factor, small_arr_factor))
-    big_arr_rebinned = rebin(big_arr, (1, big_arr_factor))
-    small_arr_rebinned = rebin(small_arr, (1, small_arr_factor))
-    shape_big_arr = numpy.shape(big_arr_rebinned)
-    shape_small_arr = numpy.shape(small_arr_rebinned)
-    
-    # Fix the lengths to make sure they are equal
-    if shape_big_arr != shape_small_arr:
-        big_arr_rebinned, small_arr_rebinned = correct_rebin(big_arr_rebinned, small_arr_rebinned)
-    return (big_arr_rebinned, small_arr_rebinned, big_arr_factor, small_arr_factor)
-    
-def rebin_arrays_for_desired_resolution(desired_delta_lambda, line, lines_arr, cont_arr, guessed_rows=500):
-    '''In other words this function smoothens the spectra to get the desired desired_delta_lambda.
-    Arrays must be numpy arrays.
-    guessed_rows to speed up code in the iterations.'''
-    R_initial = resolving_power(line, lines_arr)
-    delta_lambda_initial = line / float(R_initial)
-    print('Initial Resolving_power of lines array = %i  ----  Initial delta_lambda = %f' % (R_initial, delta_lambda_initial))
-    delta_lambda = delta_lambda_initial
-    desired_rows = guessed_rows
-    #print('Guessed rows = %s' % repr(guessed_rows))
-    lines_rebin, cont_rebin, new_lines_factor, new_cont_factor = rebin_to_desired_rows(lines_arr, cont_arr, desired_rows)
-    new_R_initial = resolving_power(line, lines_rebin)
-    new_delta_lambda_initial = line / float(new_R_initial)
-    #print('NEW Resolving_power = %i  ----  NEW delta_lambda = %f' % (new_R_initial, new_delta_lambda_initial))
-    if new_delta_lambda_initial > desired_delta_lambda:
-        #print 'new_delta_lambda_initial > desired_delta_lambda'
-        desired_rows = guessed_rows + 200
-        lines_rebin, cont_rebin, new_lines_factor, new_cont_factor = rebin_to_desired_rows(lines_arr, cont_arr, desired_rows)
-        new_R_initial = resolving_power(line, lines_rebin)
-        new_delta_lambda_initial = line / float(new_R_initial)
-        #print('NEW Resolving_power = %i  ----  NEW delta_lambda = %f' % (new_R_initial, new_delta_lambda_initial))
-
-    while (numpy.fabs(desired_delta_lambda - delta_lambda) > 0.0035):
-        lines_rebin, cont_rebin, new_lines_factor, new_cont_factor = rebin_to_desired_rows(lines_arr, cont_arr, desired_rows)
-        #print('New shape of rebinned arrays: lines, continuum', lines_rebin.shape, cont_rebin.shape)
-        R = resolving_power(line, lines_rebin)
-        delta_lambda = line / float(R)
-        desired_rows = desired_rows - 1
-        #print('Initial Resolving_power = %i  ----  Initial delta_lambda = %f' % (R_initial, delta_lambda_initial))
-        #print('**** NEW R and delta_lambda:   %f -- %f' % (R, delta_lambda))
-        #print 'Decreasing rows! Started at: %i, now at: %i' % (guessed_rows, desired_rows)
-    smoothing_factor = float(R_initial) / float(R)
-    #if R_initial >= R:
-    #    smoothing_factor = float(R_initial) / float(R)
-    #elif R_initial < R:
-    #    smoothing_factor = float(R) / float(R_initial)
-    print 'Factor of increase or decrease for: lines_array = %f and continuum_array = %f' % (new_lines_factor, new_cont_factor)
-    print 'Delta_lambda = %f,  Resolving Power = %i,  smoothing_R_factor = %f' % (delta_lambda, R, smoothing_factor)
-    print 'Decreased rows from an initial guess of %i to %i' % (guessed_rows, desired_rows)
-    return (lines_rebin, cont_rebin)
-
-def rebin_one_arr_to_desired_rows(arr, desired_rows):
-    _, rows = arr.shape
-    if rows > desired_rows:    
-        factor = float(desired_rows) / float(rows)
-    elif rows < desired_rows:     
-        factor = float(desired_rows) / float(rows)
-    elif rows == desired_rows:
-        factor = 1.0
-    rebinned_arr = rebin(arr, (1, factor))
-    return (rebinned_arr, factor)
-    
-def rebin_one_arr_to_desired_resolution(desired_delta_lambda, line, arr, guessed_rows=500):
-    '''
-    This function does the same as "rebin_arrays_for_desired_resolution" but only for one array.
-    RETURNS:  - rebinned array
-              - smoothing/increasing factor with respect to initial Resolution Power
-    '''
-    R_initial = resolving_power(line, arr)
-    delta_lambda_initial = line / float(R_initial)
-    print('Initial Resolving_power of lines array = %i  ----  Initial delta_lambda = %f' % (R_initial, delta_lambda_initial))
-    delta_lambda = delta_lambda_initial
-    desired_rows = guessed_rows
-    while (abs(desired_delta_lambda - delta_lambda) > 0.0015):
-        rebinned_arr, _ = rebin_one_arr_to_desired_rows(arr, desired_rows) 
-        R = resolving_power(line, rebinned_arr)
-        delta_lambda = line / float(R)
-        desired_rows = desired_rows - 1
-    smoothing_R_factor = float(R_initial) / float(R)
-    return (rebinned_arr, smoothing_R_factor)
-
-def do_rebin(spectrum_arr, continuum_arr, desired_rows=500):
-    '''### THIS FUNCTION IS TO BE RUNNED WHEN CONTINUUM AND SPECTRA ARRAY HAVE SAME DIMENSIONS'''
-    orig_factors = (1, 1) # Numbers that will mumtiply colums and rows
-    continuum_factor, spec_factor = factor_newshape(continuum_arr, spectrum_arr, orig_factors[1], desired_rows)
-    rebin_spec = rebin(spectrum_arr, (1, spec_factor))    
-    rebin_cont = rebin(continuum_arr, (1, continuum_factor))
-    # Since arrays have same dimensions, continuum_factor = spec_factor
-    return rebin_spec, rebin_cont, spec_factor    
-
-def find_nearest(arr, value):
-    '''
-    This function gives the content and the index in the array of the number that is closest to 
-    the value given.
-    '''
-    idx=(numpy.abs(arr-value)).argmin()
-    return arr[idx], idx
-
-
-def find_nearest_within(arr, value, threshold):
-    '''
-    This function gives the content in the array of the number that is closest to 
-    the value given, within threshold away from value.
-    '''
-    half_thres = threshold / 2.0
-    choped_arr = arr[(arr >= value-half_thres) & (arr <= value+half_thres)]
-    if len(choped_arr) == 0:
-        return 0.0
-    diff = numpy.fabs(choped_arr - value)
-    diff_min = min(diff)
-    return float(choped_arr[diff==diff_min])
-
-
-def closest(thelist, value) :
-    '''
-    This function gives the content in the list of the number that is closest to 
-    the value given.
-    '''
-    return min((abs(value - i), i) for i in thelist)[1]
-    
-def find_index_in_list(the_list, item):
-    for idx in range(0, len(the_list)):
-        if the_list[idx] == item:
-            return(idx)
-        
-'''def findinlist(func, thelist):
-    # Returns the first item in the list where function(item) == True.
-    for item in thelist:
-        if func(item):
-            return item
-'''        
-def midpoint(p1, p2):
-    return p1 + (p2-p1)/2
 
 def theo_cont(wave_arr, scale_factor=1.0):
     '''
@@ -781,31 +291,7 @@ def theo_cont(wave_arr, scale_factor=1.0):
     theoretical_cont = numpy.array([wave_arr, cont_temp]) 
     return theoretical_cont
 
-def findXinY (Xarr, Yarr, value):
-    '''This function finds value in array Y and returns the corresponding value in array X
-    # Wanted value is in array Xarr
-    # Given value is in array Yarr
-    '''
-    x = 0.0
-    for i in range(0, len(Xarr)):
-        if Yarr[i] == value:
-            x = Xarr[i] 
-    if x == 0.0:
-        raise Exception("Value %f not found in Yarr" % (value))
-        exit(1)
-    return x
-
-def convert2abs(thelist):
-    for i in range(0, len(thelist)):
-        thelist[i] = abs(thelist[i])
-    return thelist
-
-def selection(arr_x, arr_y, lower, upper):
-    # These arrays must be one dimensional numpy arrays and they both must have same length
-    arr_x_selected = arr_x[(upper >= arr_x) & (lower <= arr_x)]
-    arr_y_selected = arr_y[(upper >= arr_x) & (lower <= arr_x)]
-    return (arr_x_selected, arr_y_selected)
-
+# EQUIVALENT WIDTH FUNCTIONS 
 def EQW_line_fixed(line_arr, line_cont, line, width=10.0):
     '''
     This function determines the EW integrating over a fixed interval.
@@ -989,7 +475,6 @@ def EQW_iter(data_arr, cont_arr, line, guessed_width=2.0):
     #print('final_width = %f' % final_width)
     return (eqw, lolim, uplim)
 
-
 def EQW_initial_guess(data_arr, cont_arr, line, Teff, guessed_EQW=1):
     '''
     # line = line rest wavelength of the line of interest
@@ -1064,33 +549,6 @@ def EQW_initial_guessVG(data_arr, cont_arr, line, Teff, guessed_EQW=1):
     final_width = test_uplim - test_lolim
     print('Final array-with of expected_eqw = %f' % (final_width))
     return(VG_eqw_object, test_eqw, test_lolim, test_uplim)
-    
-    
-    
-'''    if (numpy.fabs(test_eqw) <= upper_allowed_eqw) and (numpy.fabs(test_eqw) >= lower_allowed_eqw):
-        return(VG_eqw_object, test_eqw, test_lolim, test_uplim)        
-    
-    last_wavelength = data_arr[0, len(data_arr[0])-1]
-    iteration = 0
-    increase_width = 2.0
-    while test_uplim <= last_wavelength:        
-        print('*** in the loop: expected_eqw=%f, test_eqw=%f, numpy.fabs(test_eqw)=%f' % (VG_eqw_object, test_eqw, numpy.fabs(test_eqw)))
-        print('iteration number = %i' % iteration)
-        new_lolim = test_lolim - increase_width/2.0
-        new_uplim = test_uplim + increase_width/2.0
-        print('new_lolim, new_uplim', new_lolim, new_uplim)
-        new_guessed_width = new_uplim - new_lolim
-        #test_eqw, test_lolim, test_uplim = EQW(data_arr, cont_arr, new_lolim, new_uplim)
-        test_eqw, test_lolim, test_uplim = EQW_iter(data_arr, cont_arr, line, new_guessed_width)
-        if (numpy.fabs(test_eqw) <= upper_allowed_eqw) and (numpy.fabs(test_eqw) >= lower_allowed_eqw):
-            break
-        else:
-            iteration = iteration + 1
-    final_width = test_uplim - test_lolim
-    print('Final array-with of expected_eqw = %f' % (final_width))
-    return(VG_eqw_object, test_eqw, test_lolim, test_uplim)
-'''
-
 
 
 '''### THE FOLLOWING 3 FUNCTIONS WORK TOGETHER TO FIND THE BEST GAUSSIAN FIT TO THE LINE ###'''
@@ -1138,6 +596,214 @@ def FWHM(sig):
     fwhm = 2 * (2 * math.log1p(2))**0.5 * sig
     print ('FWHM = ', fwhm)
     return fwhm
+
+############################################################################################
+# REBINNING FUNCTIONS AND RESOLVING POWER
+def rebin(arr, factor):
+    ''' arr: array-like tuple
+    factor: rebin_factor tuple
+    *** A cubic spline function is used for performing the interpolation in the zoom function'''
+    return ndimage.interpolation.zoom(arr, factor, order=1)
+
+def correct_rebin(arr1, arr2):
+    ''' Sometimes there is a less line in the resulting rebinned arrays. This function corrects for that.
+    - Both arrays have to have the ONE dimension
+    - Deleting the second element in each array (not the first so that the width remains the same)
+    - The axis in which delete is 0, meaning the entire row.
+    - THIS FUNCTION RETURNS:
+                            2 arrays of same shape '''
+    N_arr1 = len(arr1[0,:])
+    N_arr2 = len(arr2[0,:])
+    if N_arr1 > N_arr2:
+        new_point_x = arr2[0,N_arr2-2] + 0.5
+        new_point_y = numpy.interp(new_point_x, arr2[0,:], arr2[1,:])
+        arr2_x = numpy.insert(arr2[0,:], N_arr2-2, new_point_x)
+        arr2_y = numpy.insert(arr2[1,:], N_arr2-2, new_point_y)
+        arr2 = numpy.array([arr2_x, arr2_y])
+    elif N_arr1 < N_arr2:
+        new_point_x = arr1[0,N_arr1-2]+0.5
+        new_point_y = numpy.interp(new_point_x, arr1[0,:], arr1[1,:])
+        arr1_x = numpy.insert(arr1[0,:], N_arr1-2, new_point_x)
+        arr1_y = numpy.insert(arr1[1,:], N_arr1-2, new_point_y)
+        arr1 = numpy.array([arr1_x, arr1_y])
+    return(arr1, arr2)
+
+def resolving_power(line, arr):
+    '''This function determines the resolving power R at the line wavelength.
+    # arr must be a numpy array of wavelength and flux. '''
+    closest_line, idxline = find_nearest(arr[0,:], line)
+    new_delta_lambda = closest_line - arr[0, idxline-1]
+    Resolution = int(line / new_delta_lambda)
+    return (Resolution)
+
+def rebin_to_desired_rows(arr1, arr2, desired_rows):
+    '''This function simply finds the rebinned new arrays with the zoom function.
+    both arrays have to be in form of wavelength and flux numpy arrays.
+    THIS FUNCTION RETURNS:
+        - rebinned arr1
+        - rebinned arr2
+        - rebinning factor of arr1
+        - rebinning factor of arr2
+    '''
+    arr1_shape = numpy.shape(arr1)
+    arr2_shape = numpy.shape(arr2)
+    #print('Shapes of arrays: lines = %s  and  continuum = %s' % (repr(arr1_shape), repr(arr2_shape)))
+    if arr1_shape[1] > arr2_shape[1]:
+        big_arr = arr1
+        big_arr_shape = arr1_shape
+        small_arr = arr2
+        small_arr_shape = arr2_shape
+    elif arr2_shape[1] > arr1_shape[1]:
+        big_arr = arr1
+        big_arr_shape = arr1_shape
+        small_arr = arr2
+        small_arr_shape = arr2_shape
+    elif arr2_shape[1] == arr1_shape[1]:
+        if arr1_shape[1] > desired_rows:
+            new_factor = float(desired_rows) / float(arr1_shape[1]) 
+        elif arr1_shape[1] < desired_rows:
+            new_factor = float(desired_rows) / float(arr1_shape[1])
+        elif arr1_shape[1] == desired_rows:
+            new_factor = 1.0
+        arr1_rebinned = rebin(arr1, (1, new_factor))
+        arr2_rebinned = rebin(arr2, (1, new_factor))
+        return (arr1_rebinned, arr2_rebinned, new_factor, new_factor)
+ 
+    if big_arr_shape[1] > desired_rows:
+        big_arr_factor = float(desired_rows) / float(big_arr_shape[1])
+    elif big_arr_shape[1] < desired_rows:
+        big_arr_factor = float(big_arr_shape[1]) / float(desired_rows)
+    elif big_arr_shape[1] == desired_rows:
+        big_arr_factor = 1.0
+    
+    if small_arr_shape[1] > desired_rows:
+        small_arr_factor = float(desired_rows) / float(small_arr_shape[1])
+    elif small_arr_shape[1] < desired_rows:
+        small_arr_factor = float(desired_rows) / float(small_arr_shape[1])
+    elif small_arr_factor[1] == desired_rows:
+        small_arr_factor = 1.0
+    
+    #print('big_arr_factor = %f   ---   small_arr_factor = %f' % (big_arr_factor, small_arr_factor))
+    big_arr_rebinned = rebin(big_arr, (1, big_arr_factor))
+    small_arr_rebinned = rebin(small_arr, (1, small_arr_factor))
+    shape_big_arr = numpy.shape(big_arr_rebinned)
+    shape_small_arr = numpy.shape(small_arr_rebinned)
+    
+    # Fix the lengths to make sure they are equal
+    if shape_big_arr != shape_small_arr:
+        big_arr_rebinned, small_arr_rebinned = correct_rebin(big_arr_rebinned, small_arr_rebinned)
+    return (big_arr_rebinned, small_arr_rebinned, big_arr_factor, small_arr_factor)
+    
+def rebin_arrays_for_desired_resolution(desired_delta_lambda, line, lines_arr, cont_arr, guessed_rows=500):
+    '''In other words this function smoothens the spectra to get the desired desired_delta_lambda.
+    Arrays must be numpy arrays.
+    guessed_rows to speed up code in the iterations.'''
+    R_initial = resolving_power(line, lines_arr)
+    delta_lambda_initial = line / float(R_initial)
+    print('Initial Resolving_power of lines array = %i  ----  Initial delta_lambda = %f' % (R_initial, delta_lambda_initial))
+    delta_lambda = delta_lambda_initial
+    desired_rows = guessed_rows
+    #print('Guessed rows = %s' % repr(guessed_rows))
+    lines_rebin, cont_rebin, new_lines_factor, new_cont_factor = rebin_to_desired_rows(lines_arr, cont_arr, desired_rows)
+    new_R_initial = resolving_power(line, lines_rebin)
+    new_delta_lambda_initial = line / float(new_R_initial)
+    #print('NEW Resolving_power = %i  ----  NEW delta_lambda = %f' % (new_R_initial, new_delta_lambda_initial))
+    if new_delta_lambda_initial > desired_delta_lambda:
+        #print 'new_delta_lambda_initial > desired_delta_lambda'
+        desired_rows = guessed_rows + 200
+        lines_rebin, cont_rebin, new_lines_factor, new_cont_factor = rebin_to_desired_rows(lines_arr, cont_arr, desired_rows)
+        new_R_initial = resolving_power(line, lines_rebin)
+        new_delta_lambda_initial = line / float(new_R_initial)
+        #print('NEW Resolving_power = %i  ----  NEW delta_lambda = %f' % (new_R_initial, new_delta_lambda_initial))
+
+    while (numpy.fabs(desired_delta_lambda - delta_lambda) > 0.0035):
+        lines_rebin, cont_rebin, new_lines_factor, new_cont_factor = rebin_to_desired_rows(lines_arr, cont_arr, desired_rows)
+        #print('New shape of rebinned arrays: lines, continuum', lines_rebin.shape, cont_rebin.shape)
+        R = resolving_power(line, lines_rebin)
+        delta_lambda = line / float(R)
+        desired_rows = desired_rows - 1
+        #print('Initial Resolving_power = %i  ----  Initial delta_lambda = %f' % (R_initial, delta_lambda_initial))
+        #print('**** NEW R and delta_lambda:   %f -- %f' % (R, delta_lambda))
+        #print 'Decreasing rows! Started at: %i, now at: %i' % (guessed_rows, desired_rows)
+    smoothing_factor = float(R_initial) / float(R)
+    #if R_initial >= R:
+    #    smoothing_factor = float(R_initial) / float(R)
+    #elif R_initial < R:
+    #    smoothing_factor = float(R) / float(R_initial)
+    print 'Factor of increase or decrease for: lines_array = %f and continuum_array = %f' % (new_lines_factor, new_cont_factor)
+    print 'Delta_lambda = %f,  Resolving Power = %i,  smoothing_R_factor = %f' % (delta_lambda, R, smoothing_factor)
+    print 'Decreased rows from an initial guess of %i to %i' % (guessed_rows, desired_rows)
+    return (lines_rebin, cont_rebin)
+
+def rebin_one_arr_to_desired_rows(arr, desired_rows):
+    _, rows = arr.shape
+    if rows > desired_rows:    
+        factor = float(desired_rows) / float(rows)
+    elif rows < desired_rows:     
+        factor = float(desired_rows) / float(rows)
+    elif rows == desired_rows:
+        factor = 1.0
+    rebinned_arr = rebin(arr, (1, factor))
+    return (rebinned_arr, factor)
+    
+def rebin_one_arr_to_desired_resolution(desired_delta_lambda, line, arr, guessed_rows=500):
+    '''
+    This function does the same as "rebin_arrays_for_desired_resolution" but only for one array.
+    RETURNS:  - rebinned array
+              - smoothing/increasing factor with respect to initial Resolution Power
+    '''
+    R_initial = resolving_power(line, arr)
+    delta_lambda_initial = line / float(R_initial)
+    print('Initial Resolving_power of lines array = %i  ----  Initial delta_lambda = %f' % (R_initial, delta_lambda_initial))
+    delta_lambda = delta_lambda_initial
+    desired_rows = guessed_rows
+    while (abs(desired_delta_lambda - delta_lambda) > 0.0015):
+        rebinned_arr, _ = rebin_one_arr_to_desired_rows(arr, desired_rows) 
+        R = resolving_power(line, rebinned_arr)
+        delta_lambda = line / float(R)
+        desired_rows = desired_rows - 1
+    smoothing_R_factor = float(R_initial) / float(R)
+    return (rebinned_arr, smoothing_R_factor)
+
+def do_rebin(spectrum_arr, continuum_arr, desired_rows=500):
+    '''### THIS FUNCTION IS TO BE RUNNED WHEN CONTINUUM AND SPECTRA ARRAY HAVE SAME DIMENSIONS'''
+    orig_factors = (1, 1) # Numbers that will mumtiply colums and rows
+    continuum_factor, spec_factor = factor_newshape(continuum_arr, spectrum_arr, orig_factors[1], desired_rows)
+    rebin_spec = rebin(spectrum_arr, (1, spec_factor))    
+    rebin_cont = rebin(continuum_arr, (1, continuum_factor))
+    # Since arrays have same dimensions, continuum_factor = spec_factor
+    return rebin_spec, rebin_cont, spec_factor    
+
+def get_factors_and_rebin(spectrum_arr, continuum_arr, desired_rows=600):
+    '''
+    THIS FUNCTIONS DOES EVERYTHING AT ONCE FOR SPECTRA WITH SPECTRA AND CONT ARRAYS OF DIFFERENT DIMENSIONS
+    # spectrum_arr = numpy array of wavelength and flux
+    # continuum_arr = numpy array of wavelength and flux
+    # desired_rows = number of lines for output file, by default it is 600
+    THIS FUNCTION RETURNS: 
+    #     rebinned_line_array, 
+    #     rebinned_continuum_array, 
+    #     and the factors by which each one has been decreased/increased: 
+    #         new_continuum_factor, 
+    #         new_lineintensity_factor
+    '''
+    # the next two functions return a tuple for columns and rows
+    spec_factors = get_factor_lineintensity(continuum_arr, spectrum_arr) 
+    cont_factors = get_factor_continuum(continuum_arr, spectrum_arr)
+    shape_line = spectrum_arr.shape
+    shape_cont = continuum_arr.shape
+    if shape_line[1] > shape_cont[1]:
+        factors = spec_factors
+    elif shape_line[1] < shape_cont[1]:
+        factors = cont_factors
+    elif shape_line[1] == shape_cont[1]:
+        factors = spec_factors
+    # using those factors so that the number of rows is the same 
+    ### USING factor_newshape function
+    new_continuum_factor, new_lineintensity_factor = factor_newshape(continuum_arr, spectrum_arr, factors[1], desired_rows)    
+    rebin_line = rebin(spectrum_arr, (1, new_lineintensity_factor))    
+    rebin_cont = rebin(continuum_arr, (1, new_continuum_factor))
+    return rebin_line, rebin_cont, new_continuum_factor, new_lineintensity_factor
 
 def factor_newshape(continuum_arr, lineintensity_arr, lineintensity_factor, desired_rows=500):
     percent = 1.00
@@ -1199,6 +865,217 @@ def get_factor_continuum(continuum_arr, lineintensity_arr):
     continuum_columns, _ = continuum_arr.shape
     #print('This is the factor_eq for cont', factor_continuum)
     return (continuum_columns, factor_continuum)
+
+# MY ATTEMPT TO CREATE REBINNING FUNCTIONS WITHOUT USING ZOOM=SPLINE3
+def insert_point_left(arr, reference_wavelength):
+    ''' this is a two dimensional numpy array. '''
+    px1, idx_px1 = find_nearest(arr[0,:], reference_wavelength)
+    idx_px2 = idx_px1 - 1
+    px2 = arr[0,idx_px2]
+    px3 = midpoint(px1, px2)
+    py3 = numpy.interp(px3, arr[0,:], arr[1,:])
+    new_arrX = numpy.insert(arr[0,:], idx_px2, px3)
+    new_arrY = numpy.insert(arr[1,:], idx_px2, py3)
+    new_arr = numpy.array([new_arrX, new_arrY])
+    new_reference_wavelength = arr[0, idx_px2]
+    return (new_arr, new_reference_wavelength)
+
+def insert_point_right(arr, reference_wavelength):
+    ''' this is a two dimensional numpy array. '''
+    px1, idx_px1 = find_nearest(arr[0,:], reference_wavelength)
+    idx_px2 = idx_px1 + 1
+    px2 = arr[0,idx_px2]
+    px3 = midpoint(px1, px2)
+    py3 = numpy.interp(px3, arr[0,:], arr[1,:])
+    new_arrX = numpy.insert(arr[0,:], idx_px2, px3)
+    new_arrY = numpy.insert(arr[1,:], idx_px2, py3)
+    new_arr = numpy.array([new_arrX, new_arrY])
+    new_reference_wavelength = arr[0, idx_px2]
+    return (new_arr, new_reference_wavelength)
+
+def just_rebin_interpol(arr, factor, reference_wavelength):
+    '''
+    arr is a numpy array of wavelength and flux.
+    This function returns a numpy array of the same shape as arr.
+    '''
+    _, rows =  numpy.shape(arr)
+    desired_arr_rows = rows * factor
+    new_arr, new_reference_wavelength = insert_point_left(arr, reference_wavelength)
+    _, new_arr_rows = numpy.shape(new_arr)
+    count_points = 1
+    while new_arr_rows != desired_arr_rows:
+        if count_points%2==0:
+            new_arr, new_reference_wavelength = insert_point_right(new_arr, new_reference_wavelength)
+            _, new_arr_rows = numpy.shape(new_arr)
+            count_points = count_points + 1
+        else:
+            new_arr, new_reference_wavelength = insert_point_left(new_arr, new_reference_wavelength)
+            _, new_arr_rows = numpy.shape(new_arr)
+            count_points = count_points + 1
+        #print ('desired number of rows: ', desired_arr_rows)
+        #print ('new shape so far is: ', numpy.shape(new_arr))
+    return (new_arr)
+
+def smoothTriangle(data, degree, dropVals=False):
+    """performs moving triangle smoothing with a variable degree."""
+    """note that if dropVals is False, output length will be identical
+    to input length, but with copies of data at the flanking regions"""
+    triangle = numpy.array(range(degree) + [degree] + range(degree)[::-1]) + 1
+    smoothed = []
+    for i in range(degree, len(data) - degree * 2):
+        point = data[i:i + len(triangle)] * triangle
+        smoothed.append(sum(point) / sum(triangle))
+    if dropVals: return smoothed
+    smoothed = [smoothed[0]] * (degree + degree / 2) + smoothed
+    while len(smoothed) < len(data):smoothed.append(smoothed[-1])
+    return smoothed
+
+def rebinning_interpol(arr1, arr2, reference_wavelength):
+    '''
+    - Both arrays are two dimensional arrays: Shapes should be the same, length can be different.
+    - The reference_wavelength is from where to start adding points to the small array.
+    - Use this function when arrays of lines and continuum are not the same length.
+    - This function interpolates the smaller data set to make it the same as the big one.
+    #### THIS FUNCTION RETURNS: the rebinned array and the corresponding factor.
+    '''
+    _, rows1 = numpy.shape(arr1)
+    _, rows2 = numpy.shape(arr2)
+    rows_arr1 = float(rows1)
+    rows_arr2 = float(rows2)
+    if rows_arr1 < rows_arr2:
+        arr_small = arr1
+        arr_big = arr2
+        factor = (rows_arr2 ) / rows_arr1
+    elif rows_arr1 > rows_arr2:
+        arr_small = arr2
+        arr_big = arr1
+        factor = (rows_arr1 ) / rows_arr2
+    elif rows_arr1 == rows_arr2:
+        print 'No need to use this function. Use the "just_rebin_interpol" function with the same factor for both arrays.'
+        exit()
+    print ('Shape of big array: ', numpy.shape(arr_big))
+    print ('Shape of small array: ', numpy.shape(arr_small))    
+    print('Interpolating...')
+    rebinned_arr_small = just_rebin_interpol(arr_small, factor, reference_wavelength)
+    print ('Shape of new "small" array: ', numpy.shape(rebinned_arr_small))    
+    return (rebinned_arr_small, factor)
+
+############################################################################################
+# OTHER USEFUL FUNCTIONS
+def write_1d(filename, data):
+    '''filename: file name
+    data: tuple of values'''
+    try:
+        print("Writing 1d file: %s" % (filename))
+        output = numpy.column_stack((data))
+        numpy.savetxt(filename, output, delimiter=' ')
+    except IOError as e:
+        print("%s: %s" % (filename, e.strerror))
+        return False
+    return True
+
+def find_nearest(arr, value):
+    '''
+    This function gives the content and the index in the array of the number that is closest to 
+    the value given.
+    '''
+    idx=(numpy.abs(arr-value)).argmin()
+    return arr[idx], idx
+
+def find_nearest_within(arr, value, threshold):
+    '''
+    This function gives the content in the array of the number that is closest to 
+    the value given, within threshold away from value.
+    '''
+    half_thres = threshold / 2.0
+    choped_arr = arr[(arr >= value-half_thres) & (arr <= value+half_thres)]
+    if len(choped_arr) == 0:
+        return 0.0
+    diff = numpy.fabs(choped_arr - value)
+    diff_min = min(diff)
+    return float(choped_arr[diff==diff_min])
+
+def closest(thelist, value) :
+    '''
+    This function gives the content in the list of the number that is closest to 
+    the value given.
+    '''
+    return min((abs(value - i), i) for i in thelist)[1]
+    
+def find_index_in_list(the_list, item):
+    for idx in range(0, len(the_list)):
+        if the_list[idx] == item:
+            return(idx)
+        
+def midpoint(p1, p2):
+    return p1 + (p2-p1)/2
+
+def findXinY (Xarr, Yarr, value):
+    '''This function finds value in array Y and returns the corresponding value in array X
+    # Wanted value is in array Xarr
+    # Given value is in array Yarr
+    '''
+    x = 0.0
+    for i in range(0, len(Xarr)):
+        if Yarr[i] == value:
+            x = Xarr[i] 
+    if x == 0.0:
+        raise Exception("Value %f not found in Yarr" % (value))
+        exit(1)
+    return x
+
+def convert2abs(thelist):
+    for i in range(0, len(thelist)):
+        thelist[i] = abs(thelist[i])
+    return thelist
+
+def selection(arr_x, arr_y, lower, upper):
+    # These arrays must be one dimensional numpy arrays and they both must have same length
+    arr_x_selected = arr_x[(upper >= arr_x) & (lower <= arr_x)]
+    arr_y_selected = arr_y[(upper >= arr_x) & (lower <= arr_x)]
+    return (arr_x_selected, arr_y_selected)
+
+def extrapolate_arr2value(wav_and_flux_arr, wav, left=True):
+    '''
+    This function extrapolates the array from left/right to value.
+    # wav_and_flux_arr = 2D array of wavelengths and fluxes
+    # value = the wavelength we want to extraplotate to
+    # left = True  will make the extrapolation go towards lower wavelengths
+           = False  will extrapolate to higher wavelengths
+    Function returns extrapolated 2D array. 
+    '''
+    last_flux_point = numpy.interp(wav, wav_and_flux_arr[0], wav_and_flux_arr[1])
+    diff = numpy.fabs(numpy.fabs(wav) - numpy.fabs(wav_and_flux_arr[0][0]))
+    new_wavs = []
+    new_flux = []
+    increment = 2.0
+    if left == True:
+        inter_wav = wav_and_flux_arr[0][0] - increment
+    elif left == False:
+        inter_wav = wav_and_flux_arr[0][len(wav_and_flux_arr[0])-1] + increment 
+    while diff > 0.5:
+        #print 'inter_wav', inter_wav      
+        if left == True:
+            inter_wav = inter_wav - increment
+            if inter_wav < wav:
+                inter_wav = wav 
+                new_flux_point = numpy.interp(inter_wav, wav_and_flux_arr[0], wav_and_flux_arr[1])
+                break
+        if left == False:
+            inter_wav = inter_wav + increment
+            if inter_wav > wav: 
+                inter_wav = wav 
+                new_flux_point = numpy.interp(inter_wav, wav_and_flux_arr[0], wav_and_flux_arr[1])
+                break            
+        new_flux_point = numpy.interp(inter_wav, wav_and_flux_arr[0], wav_and_flux_arr[1])
+        new_flux.append(new_flux_point)
+        new_wavs.append(inter_wav)
+        diff = numpy.fabs(numpy.fabs(wav) - numpy.fabs(inter_wav))
+    new_flux.append(last_flux_point)
+    new_wavs.append(wav)
+    #print 'wav, last_wav', wav, inter_wav
+    new_arr = numpy.array([new_wavs, new_flux])
+    return new_arr
     
 def combine(a):
     '''Combine tuple into a numpy.array'''
@@ -1219,6 +1096,8 @@ def div(tuple1, tuple2):
     CGS = fin[1] / cont[1]
     return numpy.array((A, CGS))
 
+############################################################################################
+# THIS CLASS CONVERTS FROM JANSKIES AND HERTZ TO CGS UNITS 
 class Spectrum:
     def __init__(self, filename):
         numpy.set_printoptions(precision=20, suppress=False, threshold='nan')
