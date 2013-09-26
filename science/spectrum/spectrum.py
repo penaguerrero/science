@@ -9,17 +9,6 @@ from scipy import stats
 from matplotlib import pyplot
 
 
-def flux_in_band(w2interp, trimed_flux, wav_and_flux_arr, threshold):
-    '''FIND if that w2interp has a corresponding flux WITHIN the threshold band
-    RETURNS TRUE or FALSE'''
-    flux_in_band = False
-    threshold_fraction = threshold / 2.0
-    threshold_up = threshold + threshold_fraction
-    threshold_down = threshold - threshold_fraction
-    if (wav_and_flux_arr[1][(wav_and_flux_arr[0] == w2interp)] < threshold_up) and (wav_and_flux_arr[1][(wav_and_flux_arr[0] == w2interp)] > threshold_down):
-        flux_in_band = True
-    return flux_in_band
-    
 def return_trimed_arrs(original_wav_and_flux_arr, trimed_arr):
     '''
     This function returns the 150 A trimed of each side in order to create a good flux band for the
@@ -57,6 +46,14 @@ def return_trimed_arrs(original_wav_and_flux_arr, trimed_arr):
     full_sigma_clipped_arr = numpy.array([full_sigma_clipped_wavs, full_sigma_clipped_flxs])
     return full_sigma_clipped_arr
 
+def flux_in_band(w2interp, trimed_flux, wav_and_flux_arr, threshold_up, threshold_down):
+    '''FIND if that w2interp has a corresponding flux WITHIN the threshold band
+    RETURNS TRUE or FALSE'''
+    flux_in_band = False
+    if (wav_and_flux_arr[1][(wav_and_flux_arr[0] == w2interp)] < threshold_up) and (wav_and_flux_arr[1][(wav_and_flux_arr[0] == w2interp)] > threshold_down):
+        flux_in_band = True
+    return flux_in_band
+    
 def interp_flx_in_band(wav_and_flux_arr, threshold):
     '''
     This function interpolates the fluxes within the desiderd band.
@@ -67,24 +64,32 @@ def interp_flx_in_band(wav_and_flux_arr, threshold):
     # the flux array of the interpolated fluxes within the band
     '''
     # The band is given by the  
-    threshold_fraction = threshold / 2.0
-    threshold_up = threshold + threshold
-    threshold_down = threshold - threshold
+    threshold_fraction = numpy.fabs(threshold) #/ 2.0
+    threshold_up = numpy.fabs(threshold) + threshold_fraction
+    threshold_down = numpy.fabs(threshold) * (-1)
+
+    trimed_wavs = copy.deepcopy(wav_and_flux_arr[0])
+    trimed_flux = copy.deepcopy(wav_and_flux_arr[1])
+    '''
     temp_wavs = copy.deepcopy(wav_and_flux_arr[0])
     temp_flux = copy.deepcopy(wav_and_flux_arr[1])
     # To avoid the edges at the beginning and at the end of the arrays: roughly 150 Angstroms
-    trimed_wavs = temp_wavs[(temp_wavs >= temp_wavs[0]+150) & (temp_wavs <= temp_wavs[len(temp_wavs)-1]-150)]
-    trimed_flux = temp_flux[(temp_wavs >= temp_wavs[0]+150) & (temp_wavs <= temp_wavs[len(temp_wavs)-1]-150)]
+    #trimed_wavs = temp_wavs[(temp_wavs >= temp_wavs[0]+150) & (temp_wavs <= temp_wavs[len(temp_wavs)-1]-150)]
+    #trimed_flux = temp_flux[(temp_wavs >= temp_wavs[0]+150) & (temp_wavs <= temp_wavs[len(temp_wavs)-1]-150)]
     trimed_wf_arr = numpy.array([trimed_wavs, trimed_flux]) 
+    '''
     sigma_clipped_flux = []
     for i in range(len(trimed_flux)):
         # if flux is OUTSIDE threshold band
-        '''
+        
         if (trimed_flux[i] > threshold_up):
             sigma_clipped_flux.append(threshold_up)
         elif (trimed_flux[i] < threshold_down):
-            sigma_clipped_flux.append(threshold_down)            
-            '''           
+            sigma_clipped_flux.append(threshold_down)
+        else:
+            #print 'flux %e  inside of band: threshold_down %e to threshold_up %e' % (trimed_flux[i],threshold_down,threshold_up )
+            sigma_clipped_flux.append(trimed_flux[i])            
+        '''           
         if (trimed_flux[i] > threshold_up) or (trimed_flux[i] < threshold_down):
             search_w2interp = True
             increment = 2.0
@@ -92,7 +97,7 @@ def interp_flx_in_band(wav_and_flux_arr, threshold):
             w2interp, _ = find_nearest(trimed_wf_arr[0], trimed_wf_arr[0][i]+increment)
             # if that wavelength has a corresponding flux WITHIN the threshold band (flx_within=True),
             #    do interpolation in the while loop:
-            flx_within = flux_in_band(w2interp, trimed_flux, trimed_wf_arr, threshold)
+            flx_within = flux_in_band(w2interp, trimed_flux, trimed_wf_arr, threshold_up, threshold_down)
             while search_w2interp:
                 if w2interp == trimed_wf_arr[0][len(trimed_flux)-1]:
                     sigma_clipped_flux.append(trimed_flux[i])
@@ -106,17 +111,21 @@ def interp_flx_in_band(wav_and_flux_arr, threshold):
                     #print 'got it, new flux: %e  at %f. Threshold: %e' % (interp_flux, w2interp, threshold)
                 else:
                     w2interp, _ = find_nearest(trimed_wf_arr[0], trimed_wf_arr[0][i]+increment)
-                    flx_within = flux_in_band(w2interp, trimed_flux, trimed_wf_arr, threshold)
+                    flx_within = flux_in_band(w2interp, trimed_flux, trimed_wf_arr, threshold_up, threshold_down)
                     #print 'flux %e of %f was outside of threshold: %e' % (trimed_flux[i], w2interp, threshold)
                     increment = increment + 2.0
-             
         else:
             #print 'flux %e  inside of band: threshold_down %e to threshold_up %e' % (trimed_flux[i],threshold_down,threshold_up )
             sigma_clipped_flux.append(trimed_flux[i])
+       
     # Now extrapolate for the 150 A removed from each side of the edges
     trimed_arr = numpy.array([trimed_wavs, sigma_clipped_flux])
     full_sigma_clipped_arr = return_trimed_arrs(wav_and_flux_arr, trimed_arr)
     return full_sigma_clipped_arr[1]
+    '''
+    # Now extrapolate for the 150 A removed from each side of the edges
+    trimed_arr = numpy.array([trimed_wavs, sigma_clipped_flux])
+    return trimed_arr[1]
 
 def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, n_times_thresold):
     '''
@@ -145,7 +154,7 @@ def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, n_times_thresold):
     # Remove the fluxes higher or lower than the threshold
     local_threshold = (flux_mode[0]*normalize2)*n_times_thresold
     
-    if local_threshold == 0.0:
+    if local_threshold <= 0.0:
         local_threshold = numpy.median(rounded_fluxes)*normalize2
         print 'the local_threshold was the median: %e' % (local_threshold)
     else:
