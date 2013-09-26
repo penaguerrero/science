@@ -1,0 +1,101 @@
+THIS FUNCTIONS SET IS INCOMPLETE BECAUSE I FOUND A BETTER WAY TO DO THE EQUIVALENT
+THING IN A MUCH SIMPLER WAY. HOWEVER THIS WORKS! IT ONLY REQUIRES ANOTHER FUNCTION
+THAT CALCULATES THE MODE FLUX BY WINDOW.
+
+def interp_flx_in_band(wav_and_flux_arr, threshold, threshold_fraction):
+    '''
+    This function interpolates the fluxes within the desiderd band.
+    REQUIREMENTS:
+    # wav_and_flux_arr = The 2D array of wavelemgth and flux.
+    # threshold = the limit value to delimit the band.
+    FUNCTION RETURNS:
+    # the flux array of the interpolated fluxes within the band
+    '''
+    # The band is given by the  
+    threshold_up = numpy.fabs(threshold*2)*threshold_fraction
+    threshold_down = numpy.fabs(threshold*threshold_fraction) * (-1)    
+    temp_wavs = copy.deepcopy(wav_and_flux_arr[0])
+    temp_flux = copy.deepcopy(wav_and_flux_arr[1])
+    # To avoid the edges at the beginning and at the end of the arrays: roughly 150 Angstroms
+    trimed_wavs = temp_wavs[(temp_wavs >= temp_wavs[0]+150) & (temp_wavs <= temp_wavs[len(temp_wavs)-1]-150)]
+    trimed_flux = temp_flux[(temp_wavs >= temp_wavs[0]+150) & (temp_wavs <= temp_wavs[len(temp_wavs)-1]-150)]
+    trimed_wf_arr = numpy.array([trimed_wavs, trimed_flux]) 
+    sigma_clipped_flux = []
+    for i in range(len(trimed_flux)):
+        # if flux is OUTSIDE threshold band        
+        if (trimed_flux[i] > threshold_up) or (trimed_flux[i] < threshold_down):
+            search_w2interp = True
+            increment = 2.0
+            # find the wavelength to do the flux interpolation
+            w2interp, _ = find_nearest(trimed_wf_arr[0], trimed_wf_arr[0][i]+increment)
+            # if that wavelength has a corresponding flux WITHIN the threshold band (flx_within=True),
+            #    do interpolation in the while loop:
+            flx_within = flux_in_band(w2interp, trimed_flux, trimed_wf_arr, threshold_up, threshold_down)
+            while search_w2interp:
+                if w2interp == trimed_wf_arr[0][len(trimed_flux)-1]:
+                    sigma_clipped_flux.append(trimed_flux[i])
+                    #print 'got to end of array, old flux: %e  at %f, appended threshold: %e' % (trimed_flux[i], w2interp, threshold)
+                    break
+                if flx_within == True:
+                    search_w2interp = False
+                    interp_flux = numpy.interp(w2interp, trimed_wf_arr[0], trimed_wf_arr[1])
+                    sigma_clipped_flux.append(interp_flux)
+                    #print w2interp, trimed_wf_arr[1][(trimed_wf_arr[0] == w2interp)], threshold, search_w2interp
+                    #print 'got it, new flux: %e  at %f. Threshold: %e' % (interp_flux, w2interp, threshold)
+                else:
+                    w2interp, _ = find_nearest(trimed_wf_arr[0], trimed_wf_arr[0][i]+increment)
+                    flx_within = flux_in_band(w2interp, trimed_flux, trimed_wf_arr, threshold_up, threshold_down)
+                    #print 'flux %e of %f was outside of threshold: %e' % (trimed_flux[i], w2interp, threshold)
+                    increment = increment + 2.0
+        else:
+            #print 'flux %e  inside of band: threshold_down %e to threshold_up %e' % (trimed_flux[i],threshold_down,threshold_up )
+            sigma_clipped_flux.append(trimed_flux[i])
+    # Now extrapolate for the 150 A removed from each side of the edges
+    trimed_arr = numpy.array([trimed_wavs, sigma_clipped_flux])
+    full_sigma_clipped_arr = return_trimed_arrs(wav_and_flux_arr, trimed_arr)
+    return full_sigma_clipped_arr[1]
+    
+def flux_in_band(w2interp, trimed_flux, wav_and_flux_arr, threshold_up, threshold_down):
+    '''FIND if that w2interp has a corresponding flux WITHIN the threshold band
+    RETURNS TRUE or FALSE'''
+    flux_in_band = False
+    if (wav_and_flux_arr[1][(wav_and_flux_arr[0] == w2interp)] < threshold_up) and (wav_and_flux_arr[1][(wav_and_flux_arr[0] == w2interp)] > threshold_down):
+        flux_in_band = True
+    return flux_in_band
+
+def return_trimed_arrs(original_wav_and_flux_arr, trimed_arr):
+    '''
+    This function returns the 150 A trimed of each side in order to create a good flux band for the
+    continuum fit.
+    # Function retunrs the trimed array extrapolated to the same length and with the same wavelengths
+        as the original.
+    '''
+    # Find the limits not to exceed the length of the original array.
+    _, i = find_nearest(original_wav_and_flux_arr[0], trimed_arr[0][0])
+    lolim = original_wav_and_flux_arr[0][i-1]
+    _, i = find_nearest(original_wav_and_flux_arr[0], trimed_arr[0][len(trimed_arr[0])-1])
+    uplim = original_wav_and_flux_arr[0][i+1]
+    # generate the arrays with the wavelengths to use for the extrapolation
+    wavs2extrapolate_left = original_wav_and_flux_arr[0][(original_wav_and_flux_arr[0] <= lolim)]
+    wavs2extrapolate_right = original_wav_and_flux_arr[0][(original_wav_and_flux_arr[0] >= uplim)]
+    left_flxs = []
+    for w in wavs2extrapolate_left:
+        f = numpy.interp(w, trimed_arr[0], trimed_arr[1])
+        left_flxs.append(f)
+    right_flxs = []
+    for w in wavs2extrapolate_right:
+        f = numpy.interp(w, trimed_arr[0], trimed_arr[1])
+        right_flxs.append(f)
+    full_sigma_clipped_wavs = []
+    full_sigma_clipped_flxs = []
+    for w, f in zip(wavs2extrapolate_left, left_flxs):
+        full_sigma_clipped_wavs.append(w)
+        full_sigma_clipped_flxs.append(f)
+    for w, f in zip(trimed_arr[0], trimed_arr[1]):
+        full_sigma_clipped_wavs.append(w)
+        full_sigma_clipped_flxs.append(f)
+    for w, f in zip(wavs2extrapolate_right, right_flxs):
+        full_sigma_clipped_wavs.append(w)
+        full_sigma_clipped_flxs.append(f)
+    full_sigma_clipped_arr = numpy.array([full_sigma_clipped_wavs, full_sigma_clipped_flxs])
+    return full_sigma_clipped_arr
