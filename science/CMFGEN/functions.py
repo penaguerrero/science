@@ -10,7 +10,7 @@ from ..claus import clausfile
 def into2cols(path_CMFGEN, path_results, lower_wave, upper_wave, templogg):
     # Find directory
     ogrid_dir = glob.glob(path_CMFGEN)
-    files_of_interest = ['cmf_flx', 'obs_cont']    
+    files_of_interest = ['obs_fin_10', 'obs_cont']    
     for d in ogrid_dir:
         dir_name = os.path.join(d, 'obs')
         files_in_dir = os.listdir(dir_name)
