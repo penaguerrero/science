@@ -62,7 +62,7 @@ def oldinto2cols(path_CMFGEN, path_results, lower_wave, upper_wave, templogg):
         else:
             print('There is no file OBSFLUX in this directory: %s' % (dir_name))
             
-def find_linear_continuum(wavflux_arr, temp_obj):
+def find_linear_continuum(wavflux_arr, temp_obj, plane_parallel=False):
     '''
     This function defines a continuum to CMFGEN files with a linear equation: y = m*(x -x1) + y1.
     x1, x2 = fist choice of points to create the line
@@ -74,7 +74,7 @@ def find_linear_continuum(wavflux_arr, temp_obj):
     ***RETURNS the array of wavelength and continuum fluxes.
     '''
     # For Teff lower than 35,000
-    x1 = 1270.3 #1274.63
+    x1 = 1274.63 #1270.3
     x2 = 1284.5 #1290.42
     # For Teff between 35,000 and 48,000
     x3 = 1191.8 #1271.61
