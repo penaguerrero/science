@@ -48,27 +48,28 @@ def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, thresold_fraction):
     FUNCTION RETURNS:
     # The 2D wavelength and trimed flux array
     '''
+    print '    Trimming flux to calculate continuum...'
     # First window
     window_lo = min(wav_and_flux_arr[0])    
     window_up, _ = find_nearest(wav_and_flux_arr[0], window_lo+window_wdith)
-    print 'Window from  %0.2f  to  %0.2f  Angstroms' % (window_lo, window_up)
+    #print 'Window from  %0.2f  to  %0.2f  Angstroms' % (window_lo, window_up)
     f_win = wav_and_flux_arr[1][(wav_and_flux_arr[0] >= window_lo) & (wav_and_flux_arr[0] <= window_up)]
     normalize2 = 1e-16
     norm_flxs = f_win / normalize2
     decimals = 2
     rounded_fluxes = numpy.around(norm_flxs, decimals)
     flux_mode = stats.mode(rounded_fluxes, axis=None)
-    print 'flux mode: ', flux_mode, flux_mode[0] * normalize2,
-    print 'thresold_fraction', thresold_fraction
-    print 'flux_mode = threshold*thresold_fraction = ',  (flux_mode[0]*normalize2) * thresold_fraction
+    #print 'flux mode: ', flux_mode, flux_mode[0] * normalize2,
+    #print 'thresold_fraction', thresold_fraction
+    #print 'flux_mode = threshold*thresold_fraction = ',  (flux_mode[0]*normalize2) * thresold_fraction
     # Remove the fluxes higher or lower than the threshold
     local_threshold = flux_mode[0] * normalize2
     # Make sure that the edges do not take the continuum to zero
     if local_threshold <= 0.0:
         local_threshold = numpy.median(rounded_fluxes)*normalize2
-        print 'the local_threshold was the median: %e' % (local_threshold)
-    else:
-        print 'this is the local_threshold: %e' % (local_threshold)
+        #print 'the local_threshold was the median: %e' % (local_threshold)
+    #else:
+    #    print 'this is the local_threshold: %e' % (local_threshold)
     trimed_flux = get_sigma_clipped_flux(wav_and_flux_arr, local_threshold, thresold_fraction)
     # Nexts windows
     end_loop = False
@@ -81,13 +82,13 @@ def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, thresold_fraction):
         else:
             end_loop = True
             window_up = max(wav_and_flux_arr[0])
-        print 'Window from  %0.2f  to  %0.2f  Angstroms' % (window_lo, window_up)
+        #print 'Window from  %0.2f  to  %0.2f  Angstroms' % (window_lo, window_up)
         f_win = wav_and_flux_arr[1][(wav_and_flux_arr[0] >= window_lo) & (wav_and_flux_arr[0] <= window_up)]
         norm_flxs = f_win / normalize2
-        print 'got window fluxes and normalized them!'
+        #print 'got window fluxes and normalized them!'
         rounded_fluxes = numpy.around(norm_flxs, decimals)
         flux_mode = stats.mode(rounded_fluxes, axis=None)
-        print 'flux mode, thresold_fraction, flux_mode*thresold_fraction: ', flux_mode, flux_mode[0]*normalize2, thresold_fraction, (flux_mode[0]*normalize2)*thresold_fraction   
+        #print 'flux mode, thresold_fraction, flux_mode*thresold_fraction: ', flux_mode, flux_mode[0]*normalize2, thresold_fraction, (flux_mode[0]*normalize2)*thresold_fraction   
         local_threshold = flux_mode[0] * normalize2
         local_trimed_flux = get_sigma_clipped_flux(wav_and_flux_arr, local_threshold, thresold_fraction)
         numpy.append(trimed_flux, local_trimed_flux)    
@@ -125,10 +126,13 @@ def fit_continuum(object_spectra, z, nth=5, thresold_fraction=1.0, window_wdith=
     polynomial = numpy.poly1d(coefficients)
     f_pol = polynomial(wf[0])
     fitted_continuum = numpy.array([wf[0], f_pol])
+    pyplot.title('z-corrected spectra')
+    pyplot.xlabel('Wavelength [$\AA$]')
+    pyplot.ylabel('Flux [ergs/s/cm$^2$/$\AA$]')    
     pyplot.plot(corr_wf[0], corr_wf[1], 'k', wf[0], wf[1], 'b', fitted_continuum[0], fitted_continuum[1], 'r')
     pyplot.show()
     # Normalize to that continuum if norm=True
-    print 'Continuum calculated. Normalization to continuum was set to ', normalize
+    print 'Continuum calculated. Normalization to continuum was set to: ', normalize
     if normalize == True:
         norm_flux = object_spectra[1] / f_pol
         norm_wf = numpy.array([wf[0], norm_flux])
@@ -142,7 +146,7 @@ def fit_continuum(object_spectra, z, nth=5, thresold_fraction=1.0, window_wdith=
 
 ############################################################################################
 # LINE INFORMATION
-def find_lines_info(object_spectra, continuum, vacuum=False, text_table=False, n=0.999271):
+def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=False, vacuum=False, n=0.999271):
     '''
     This function takes the object and continuum arrays to find the
     lines given in the lines_catalog.txt file.
@@ -164,8 +168,11 @@ def find_lines_info(object_spectra, continuum, vacuum=False, text_table=False, n
     # EWs_list = the list of EWs it calculated
     # if text_table=True a text file containing all this information
     '''
-    # Read the line_catalog file
-    f = open('/Users/gallo/Documents/AptanaStudio3/science/science/spectrum/lines_catalog.txt', 'r')
+    # Read the line_catalog file, assuming that the path is the same:
+    # '/Users/name_of_home_directory/Documents/AptanaStudio3/science/science/spectrum/lines_catalog.txt'
+    line_catalog_path = os.path.abspath('../../science/science/spectrum/lines_catalog.txt')
+    #print line_catalog_path
+    f = open(line_catalog_path, 'r')
     list_rows_of_file = f.readlines()
     f.close()
     wavelength = []
@@ -248,16 +255,21 @@ def find_lines_info(object_spectra, continuum, vacuum=False, text_table=False, n
             EWs_list.append(ew) 
     # Create the table of Net Fluxes and EQWs
     if text_table == True:
-        file_name = raw_input('Please type name of the .txt file containing the line info. Use the full path.')
-        txt_file = open(file_name, 'w+')
+        #linesinfo_file_name = raw_input('Please type name of the .txt file containing the line info. Use the full path.')
+        txt_file = open(linesinfo_file_name, 'w+')
         print >> txt_file,  use_wavs_text
         print >> txt_file,   '# Positive EW = emission        Negative EW = absorption' 
         print >> txt_file,   'Catalog WL    Observed WL  Width[A]    Flux [cgs]      Continuum [cgs]    EW [A]'
         for cw, w, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list):
-            #print ('{0:=6}    {1:>6}    {2:>4}    {3:>0.3}'.format(cw, w, F, ew))
             print >> txt_file, ('%0.2f        %0.2f       %i        %0.3e        %0.3e        %0.3f' % (cw, w, s, F, C, ew))   
         txt_file.close()
-        print 'File writen!'
+        print 'File   %s   writen!' % linesinfo_file_name
+    elif text_table == False:
+        print '# Positive EW = emission        Negative EW = absorption' 
+        print 'Catalog WL    Observed WL  Width[A]    Flux [cgs]      Continuum [cgs]    EW [A]'
+        for cw, w, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list):
+            #print ('{:>4} {:>12.2} {:>10} {:>12.3} {:>20} {:>20}'.format(cw, w, s, F, C, ew))
+            print ('%0.2f        %0.2f       %i        %0.3e        %0.3e        %0.3f' % (cw, w, s, F, C, ew))   
     return catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list
 
 def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav):
