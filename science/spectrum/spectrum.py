@@ -269,7 +269,7 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
         print 'Catalog WL    Observed WL  Width[A]    Flux [cgs]      Continuum [cgs]    EW [A]'
         for cw, w, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list):
             #print ('{:>4} {:>12.2} {:>10} {:>12.3} {:>20} {:>20}'.format(cw, w, s, F, C, ew))
-            print ('%0.2f        %0.2f       %i        %0.3e        %0.3e        %0.3f' % (cw, w, s, F, C, ew))   
+            print ('%0.2f        %0.2f       %i        %0.3e        %0.3e        %0.3f' % (cw, w, s, F, C, ew))
     return catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list
 
 def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav):
