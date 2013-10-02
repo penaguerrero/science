@@ -93,6 +93,18 @@ def find_linear_continuum(wavflux_arr, temp_obj, plane_parallel=False):
     ya = spectrum.findXinY(wavflux_arr[1], wavflux_arr[0], temp_xa)
     yb = spectrum.findXinY(wavflux_arr[1], wavflux_arr[0], temp_xb)
     
+    if plane_parallel == True:
+        xa = 1244 
+        xb = 1283.6
+        temp_x1, _ = spectrum.find_nearest(wavflux_arr[0], xa)
+        temp_x2, _ = spectrum.find_nearest(wavflux_arr[0], xb)
+        #print('closest wavelengths: %f, %f' % (temp_x1, temp_x2))
+        ya_temp = spectrum.findXinY(wavflux_arr[1], wavflux_arr[0], temp_x1)
+        yb_temp = spectrum.findXinY(wavflux_arr[1], wavflux_arr[0], temp_x2)
+        percentage = 0.027
+        ya = ya_temp + ya_temp*percentage
+        yb = yb_temp + yb_temp*percentage
+
     # Determine which pair of x points to use according to the spectrum features, that change with temperature
     if (numpy.fabs(yb) > numpy.fabs(ya)) or (float(temp_obj) > 35000.0) and (float(temp_obj) < 48000.0):
         #print('(numpy.fabs(yb) > numpy.fabs(ya)) or (float(temp_obj) > 35000.0) and (float(temp_obj) < 48000.0)')
