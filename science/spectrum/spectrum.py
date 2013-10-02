@@ -205,10 +205,12 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
             wavs_vacuum.append(wvac)
         else:
             wavs_vacuum.append(w)
-    # Determine the strength of the lines: no=5A, weak=7, medium=13, yes=20, super=30
+    # Determine the strength of the lines: nw=3A, no=5, weak=7, medium=13, yes=20, super=30
     width = []
     for sline in strong_line:
-        if sline == "no":
+        if sline == "nw":
+            s = 3.0
+        elif sline == "no":
             s = 5.0
         elif sline == "weak":
             s = 7.0
@@ -268,7 +270,7 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
         print '# Positive EW = emission        Negative EW = absorption' 
         print 'Catalog WL    Observed WL  Width[A]    Flux [cgs]      Continuum [cgs]    EW [A]'
         for cw, w, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list):
-            #print ('{:>4} {:>12.2} {:>10} {:>12.3} {:>20} {:>20}'.format(cw, w, s, F, C, ew))
+            #print ('{:>4}{:>12.2}{:>10}{:>12.3}{:>20}{:>20}'.format(cw, w, s, F, C, ew))
             print ('%0.2f        %0.2f       %i        %0.3e        %0.3e        %0.3f' % (cw, w, s, F, C, ew))
     return catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list
 
