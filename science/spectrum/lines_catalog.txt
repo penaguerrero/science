@@ -1,4 +1,4 @@
-# UV lines taken from Leitherer, Tremonit Heckman, & Calzetti (2011)
+# UV lines taken from Leitherer, Tremonit, Heckman, & Calzetti (2011)
 # wavelength
 #	 Element
 #		   Ion
@@ -96,7 +96,7 @@
 1901.77	Fe	2	no	NA	NA	nw
 1906.68	C	3	yes	semi	NA	nw
 1908.73	C	3	yes	semi	NA	nw
-1908	C	3	yes	semi	NA	medium
+1908	C	3	yes	semi	NA	weak
 1922.79	Fe	3	no	NA	NA	nw
 1923.01	Fe	3	no	NA	NA	nw
 1923.88	Fe	3	no	NA	NA	nw
@@ -222,7 +222,7 @@
 3926.54	He	1	no	NA	58	no
 3964.73	He	1	no	NA	5	no
 3967.46	Ne	3	yes	total	F1	no
-3970.07	H	1	no	NA	H7	weak
+3970.07	H	1	no	NA	H7	no
 #3979.78	Fe	2	yes	total	F9	no
 #3979.93	Fe	2	yes	total	F8	no
 4004.38	0.0183	0.0249	no	NA	20	no
@@ -378,7 +378,7 @@
 4814.53	Fe	2	yes	total	F20	no
 #4850.7	Fe	2	yes	total	F20	no
 #4855.53	0.0259	0.026	no	NA	15	no
-4861.33	H	1	no	NA	H4	yes
+4861.33	H	1	no	NA	H4	medium
 #4870.53	0.0061	0.0061	no	NA	30	no
 #4879.17	0.0124	0.0123	no	NA	20	no
 4881.11	Fe	3	yes	total	F2	no
@@ -390,7 +390,7 @@
 4931.8	O	3	yes	total	F1	no
 4931	Fe	3	yes	total	F1	no
 #4933.79	0.0047	0.0045	no	NA	30	no
-4958.91	O	3	yes	total	F1	yes
+4958.91	O	3	yes	total	F1	medium
 #4985.9	Fe	3	yes	total	F2	no
 #4987.2	Fe	3	yes	total	F2	no
 5006.84	O	3	yes	total	F1	yes
