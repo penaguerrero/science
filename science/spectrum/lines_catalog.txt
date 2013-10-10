@@ -206,7 +206,7 @@
 3856.13	O	2	no	NA	12	no
 3860.15	S	2	no	NA	41	no
 #3862.6	S	3	no	NA	1	no
-3868.75	Ne	3	yes	total	F1	medium
+3868.75	Ne	3	yes	total	F1	weak
 #3871.79	He	1	no	NA	60	no
 3875.82	O	2	no	NA	13	no
 3876.05	C	2	no	NA	33	no
