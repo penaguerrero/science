@@ -206,7 +206,7 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
             strong_line.append(data[6])
     # If the wavelength is grater than 2000 correct the theoretical air wavelengths to vacuum using the IAU
     # standard for conversion from air to vacuum wavelengths is given in Morton (1991, ApJS, 77, 119). To
-    # correct find the refraction index for that wavelength and then use left side of equation 3 of Morton:
+    # correct find the refraction index for that wavelength and then use:
     #       wav_vac / wav_air -1 = n - 1
     wavs_air = []
     wavs_vacuum = []
