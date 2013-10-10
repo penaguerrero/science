@@ -146,6 +146,14 @@ def fit_continuum(object_spectra, z, nth=5, thresold_fraction=1.0, window_wdith=
 
 ############################################################################################
 # LINE INFORMATION
+def n4airvac_conversion(wav):
+    '''This function finds the index of refraction for that wavelength.
+        *** Took the equation from IAU convention for wavelength conversion described in 
+            Morton (1991, ApJS, 77, 119)'''
+    sigma_wav = 10000/wav
+    n = 1 + 6.4328e-5 + 2.94981e-2/(146*sigma_wav*sigma_wav) + 2.5540e-4/(41*sigma_wav*sigma_wav)
+    return n
+
 def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=False, vacuum=False, n=0.999271):
     '''
     This function takes the object and continuum arrays to find the
@@ -196,16 +204,30 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
             how_forbidden.append(data[4])
             transition.append(data[5])
             strong_line.append(data[6])
-    # If the wavelength is grater than 2900 correct the theoretical air wavelengths to vacuum using
-    # equation:  1-n = w_vac/w_air - 1
+    # If the wavelength is grater than 2000 correct the theoretical air wavelengths to vacuum using the IAU
+    # standard for conversion from air to vacuum wavelengths is given in Morton (1991, ApJS, 77, 119). To
+    # correct find the refraction index for that wavelength and then use:
+    #       wav_vac / wav_air -1 = n - 1
+    wavs_air = []
     wavs_vacuum = []
     for w in wavelength:
-        if w > 2900:
-            wvac = w * (2-n)
-            wavs_vacuum.append(wvac)
-        else:
+        # separate air and vacuum wavelengths into 2 lists
+        if w < 2000:
+            # For keeping all vacuum wavelengths
             wavs_vacuum.append(w)
-    # Determine the strength of the lines: nw=3A, no=5, weak=7, medium=13, yes=20, super=30
+            # For converting vaccuum to air
+            wav_refraction_index = n4airvac_conversion(w)
+            wair = w / (2 - wav_refraction_index)
+            wavs_air.append(wair)
+        elif w >= 2000:
+            # For converting to vacuum wavelengths
+            wav_refraction_index = n4airvac_conversion(w)
+            wvac = w * (2 - wav_refraction_index)
+            wavs_vacuum.append(wvac)
+            # For keeping all AIR wavelengths
+            wavs_air.append(w)
+            
+    # Determine the strength of the lines: no=5A, weak=7, medium=13, yes=20, super=30
     width = []
     for sline in strong_line:
         if sline == "nw":
@@ -222,20 +244,24 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
             s = 30.0
         width.append(s)
     # Search in the object given for the lines in the lines_catalog
-    lines_catalog = (wavelength, wavs_vacuum, element, ion, forbidden, how_forbidden, transition, width)
+    lines_catalog = (wavs_air, wavs_vacuum, element, ion, forbidden, how_forbidden, transition, width)
     net_fluxes_list = []
     EWs_list = []
     central_wavelength_list =[]
     catalog_wavs_found = []
     continuum_list =[]
     width_list = []
+    found_element = []
+    found_ion = []
+    found_ion_forbidden = []
+    found_ion_how_forbidden = []
     # but choose the right wavelength column
     if vacuum == True:
         use_wavs = 1
-        use_wavs_text = '# Used only vacuum wavelengths to find lines from line_catalog.txt'
+        use_wavs_text = '# Used VACUUM wavelengths to find lines from line_catalog.txt'
     else:
         use_wavs = 0
-        use_wavs_text = '# Used vacuum and air wavelengths (from 2900A) to find lines from line_catalog.txt'
+        use_wavs_text = '# Used AIR wavelengths to find lines from line_catalog.txt'
     #print use_wavs_text
     for i in range(len(lines_catalog[0])):
         # find the line in the catalog that is closest to a 
@@ -255,23 +281,27 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
             continuum_list.append(float(C))
             net_fluxes_list.append(F)
             EWs_list.append(ew) 
+            found_element.append(lines_catalog[2][i])
+            found_ion.append(lines_catalog[3][i])
+            found_ion_forbidden.append(lines_catalog[4][i])
+            found_ion_how_forbidden.append(lines_catalog[5][i])
     # Create the table of Net Fluxes and EQWs
     if text_table == True:
         #linesinfo_file_name = raw_input('Please type name of the .txt file containing the line info. Use the full path.')
         txt_file = open(linesinfo_file_name, 'w+')
         print >> txt_file,  use_wavs_text
         print >> txt_file,   '# Positive EW = emission        Negative EW = absorption' 
-        print >> txt_file,   'Catalog WL    Observed WL  Width[A]    Flux [cgs]      Continuum [cgs]    EW [A]'
-        for cw, w, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list):
-            print >> txt_file, ('%0.2f        %0.2f       %i        %0.3e        %0.3e        %0.3f' % (cw, w, s, F, C, ew))   
+        print >> txt_file,   'Catalog WL    Observed WL  Element  Ion  Forbidden  How much  Width[A]    Flux [cgs]      Continuum [cgs]    EW [A]'
+        for cw, w, e, i, fd, h, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, found_element, found_ion, found_ion_forbidden, found_ion_how_forbidden, width_list, net_fluxes_list, continuum_list, EWs_list):
+            print >> txt_file, ('%0.2f        %0.2f        %s      %s    %s        %s        %i        %0.3e        %0.3e        %0.3f' % (cw, w, e, i, fd, h, s, F, C, ew))   
         txt_file.close()
         print 'File   %s   writen!' % linesinfo_file_name
     elif text_table == False:
         print '# Positive EW = emission        Negative EW = absorption' 
-        print 'Catalog WL    Observed WL  Width[A]    Flux [cgs]      Continuum [cgs]    EW [A]'
-        for cw, w, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list):
-            #print ('{:>4}{:>12.2}{:>10}{:>12.3}{:>20}{:>20}'.format(cw, w, s, F, C, ew))
-            print ('%0.2f        %0.2f       %i        %0.3e        %0.3e        %0.3f' % (cw, w, s, F, C, ew))
+        print 'Catalog WL    Observed WL  Element    Ion    Forbidden  How much    Width[A]    Flux [cgs]      Continuum [cgs]    EW [A]'
+        for cw, w, e, i, fd, h, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, found_element, found_ion, found_ion_forbidden, found_ion_how_forbidden, width_list, net_fluxes_list, continuum_list, EWs_list):
+            #print ('{:>4} {:>12.2} {:>10} {:>12.3} {:>20} {:>20}'.format(cw, w, s, F, C, ew))
+            print ('%0.2f        %0.2f    %s    %s    %s    %s    %i        %0.3e        %0.3e        %0.3f' % (cw, w, e, i, fd, h, s, F, C, ew))
     return catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list
 
 def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav):
