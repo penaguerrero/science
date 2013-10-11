@@ -96,7 +96,7 @@ def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, thresold_fraction):
     trimed_wav_and_flux_arr = numpy.array([wav_and_flux_arr[0], trimed_flux])
     return trimed_wav_and_flux_arr
 
-def fit_continuum(object_spectra, z, nth=5, thresold_fraction=1.0, window_wdith=150, normalize=True):
+def fit_continuum(object_name, object_spectra, z, nth=5, thresold_fraction=1.0, window_wdith=150, plot=True, normalize=True):
     '''
     This function shifts the object's data to the rest frame (z=0). The function then fits a 
     continuum to the entire spectrum, omitting the lines windows (it interpolates 
@@ -126,31 +126,23 @@ def fit_continuum(object_spectra, z, nth=5, thresold_fraction=1.0, window_wdith=
     polynomial = numpy.poly1d(coefficients)
     f_pol = polynomial(wf[0])
     fitted_continuum = numpy.array([wf[0], f_pol])
-    # Find the wavelength rage for the subtitle of the plot
-    w_min = corr_wf[0][0]
-    w_max = corr_wf[0][len(corr_wf[0])-1]
-    if w_max <= 3500.0:
-        w_range = 'NUV'
-    elif (w_min > 2500.0) and (w_max < 9800):
-        w_range = 'Optical'
-    elif w_max > 7000.0:
-        w_range = 'NIR'
-    # Plot
-    pyplot.title('z-corrected spectra')
-    pyplot.suptitle(w_range)
-    pyplot.xlabel('Wavelength [$\AA$]')
-    pyplot.ylabel('Flux [ergs/s/cm$^2$/$\AA$]')    
-    pyplot.plot(corr_wf[0], corr_wf[1], 'k', wf[0], wf[1], 'b', fitted_continuum[0], fitted_continuum[1], 'r')
-    pyplot.show()
-    # Normalize to that continuum if norm=True
-    print 'Continuum calculated. Normalization to continuum was set to: ', normalize
-    if normalize == True:
+    # Plot if asked to
+    if plot == True:
+        pyplot.title(object_name)
+        pyplot.suptitle('z-corrected spectra')
+        pyplot.xlabel('Wavelength [$\AA$]')
+        pyplot.ylabel('Flux [ergs/s/cm$^2$/$\AA$]')    
+        pyplot.plot(corr_wf[0], corr_wf[1], 'k', wf[0], wf[1], 'b', fitted_continuum[0], fitted_continuum[1], 'r')
+        pyplot.show()
+        # Normalize to that continuum if norm=True
+        print 'Continuum calculated. Normalization to continuum was set to: ', normalize
+    if (normalize == True) and (plot == True):
         norm_flux = object_spectra[1] / f_pol
         norm_wf = numpy.array([wf[0], norm_flux])
         # Give the theoretical continuum for the line finding
         norm_continuum = theo_cont(object_spectra[0])
-        pyplot.title('z-corrected spectra')
-        pyplot.suptitle(w_range)
+        pyplot.title(object_name)
+        pyplot.suptitle('z-corrected spectra')
         pyplot.xlabel('Wavelength [$\AA$]')
         pyplot.ylabel('Normalized Flux')    
         pyplot.plot(norm_wf[0], norm_wf[1], 'b', norm_continuum[0], norm_continuum[1], 'r')
@@ -169,7 +161,7 @@ def n4airvac_conversion(wav):
     n = 1 + 6.4328e-5 + 2.94981e-2/(146*sigma_wav*sigma_wav) + 2.5540e-4/(41*sigma_wav*sigma_wav)
     return n
 
-def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=False, vacuum=False, n=0.999271):
+def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=False, vacuum=False):
     '''
     This function takes the object and continuum arrays to find the
     lines given in the lines_catalog.txt file.
@@ -223,23 +215,27 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
     # standard for conversion from air to vacuum wavelengths is given in Morton (1991, ApJS, 77, 119). To
     # correct find the refraction index for that wavelength and then use:
     #       wav_vac / wav_air -1 = n - 1
+    # (To start I usded NIST, n=0.999271)
     wavs_air = []
     wavs_vacuum = []
     for w in wavelength:
         # separate air and vacuum wavelengths into 2 lists
-        if w < 2000:
+        if w < 2000.0:
             # For keeping all vacuum wavelengths
             wavs_vacuum.append(w)
             # For converting vaccuum to air
+            #print 'Wavelength < 2000, converting to air'
             wav_refraction_index = n4airvac_conversion(w)
+            #print 'Refraction index  n = %f' % (wav_refraction_index)
             wair = w / (2 - wav_refraction_index)
             wavs_air.append(wair)
-        elif w >= 2000:
+        elif w >= 2000.0:
             # For converting to vacuum wavelengths
             wav_refraction_index = n4airvac_conversion(w)
             wvac = w * (2 - wav_refraction_index)
             wavs_vacuum.append(wvac)
             # For keeping all AIR wavelengths
+            #print 'Wavelength > 2000, keeping air'
             wavs_air.append(w)
             
     # Determine the strength of the lines: no=5A, weak=7, medium=13, yes=20, super=30
@@ -274,10 +270,10 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
     if vacuum == True:
         use_wavs = 1
         use_wavs_text = '# Used VACUUM wavelengths to find lines from line_catalog.txt'
-    else:
+    if vacuum == False:
         use_wavs = 0
         use_wavs_text = '# Used AIR wavelengths to find lines from line_catalog.txt'
-    #print use_wavs_text
+    print 'vacuum was set to %s, %s' % (vacuum, use_wavs_text)
     for i in range(len(lines_catalog[0])):
         # find the line in the catalog that is closest to a 
         nearest2line = find_nearest_within(object_spectra[0], lines_catalog[use_wavs][i], 3)
@@ -306,17 +302,16 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
         txt_file = open(linesinfo_file_name, 'w+')
         print >> txt_file,  use_wavs_text
         print >> txt_file,   '# Positive EW = emission        Negative EW = absorption' 
-        print >> txt_file,   'Catalog WL    Observed WL  Element  Ion  Forbidden  How much  Width[A]    Flux [cgs]      Continuum [cgs]    EW [A]'
+        print >> txt_file,  ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
         for cw, w, e, i, fd, h, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, found_element, found_ion, found_ion_forbidden, found_ion_how_forbidden, width_list, net_fluxes_list, continuum_list, EWs_list):
-            print >> txt_file, ('%0.2f        %0.2f        %s      %s    %s        %s        %i        %0.3e        %0.3e        %0.3f' % (cw, w, e, i, fd, h, s, F, C, ew))   
+            print >> txt_file,  ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
         txt_file.close()
         print 'File   %s   writen!' % linesinfo_file_name
     elif text_table == False:
         print '# Positive EW = emission        Negative EW = absorption' 
-        print 'Catalog WL    Observed WL  Element  Ion  Forbidden  How much  Width[A]    Flux [cgs]      Continuum [cgs]    EW [A]'
+        print ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
         for cw, w, e, i, fd, h, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, found_element, found_ion, found_ion_forbidden, found_ion_how_forbidden, width_list, net_fluxes_list, continuum_list, EWs_list):
-            print ('{:>6}      {:>6}{:>6}{:<6}{:<10}{:<10}{:<20}{:<20}{:<20}{:<20}'.format(cw, w, e, i, fd, h, s, F, C, ew))
-            #print ('%0.2f        %0.2f        %s      %s    %s        %s        %i        %0.3e        %0.3e        %0.3f' % (cw, w, e, i, fd, h, s, F, C, ew))   
+            print ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
     return catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list
 
 def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav):
