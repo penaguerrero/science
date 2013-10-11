@@ -52,9 +52,9 @@ def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, thresold_fraction):
     # First window
     window_lo = min(wav_and_flux_arr[0])    
     window_up, _ = find_nearest(wav_and_flux_arr[0], window_lo+window_wdith)
-    #print 'Window from  %0.2f  to  %0.2f  Angstroms' % (window_lo, window_up)
+    print 'Window from  %0.2f  to  %0.2f  Angstroms' % (window_lo, window_up)
     f_win = wav_and_flux_arr[1][(wav_and_flux_arr[0] >= window_lo) & (wav_and_flux_arr[0] <= window_up)]
-    normalize2 = 1e-16
+    normalize2 = 1e-15
     norm_flxs = f_win / normalize2
     decimals = 2
     rounded_fluxes = numpy.around(norm_flxs, decimals)
@@ -63,14 +63,21 @@ def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, thresold_fraction):
     #print 'thresold_fraction', thresold_fraction
     #print 'flux_mode = threshold*thresold_fraction = ',  (flux_mode[0]*normalize2) * thresold_fraction
     # Remove the fluxes higher or lower than the threshold
+    normalized_copy = copy.deepcopy(norm_flxs)
+    max_flx = max(normalized_copy)
+    min_flx = min(normalized_copy)
+    normalized_copy_mode = flux_mode[0]
+
+    '''    
     local_threshold = flux_mode[0] * normalize2
     # Make sure that the edges do not take the continuum to zero
     if local_threshold <= 0.0:
         local_threshold = numpy.median(rounded_fluxes)*normalize2
-        #print 'the local_threshold was the median: %e' % (local_threshold)
-    #else:
-    #    print 'this is the local_threshold: %e' % (local_threshold)
+        print 'the local_threshold was the median: %e' % (local_threshold)
+    else:
+        print 'this is the local_threshold: %e' % (local_threshold)
     trimed_flux = get_sigma_clipped_flux(wav_and_flux_arr, local_threshold, thresold_fraction)
+    ''' 
     # Nexts windows
     end_loop = False
     while end_loop == False:
@@ -82,13 +89,13 @@ def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, thresold_fraction):
         else:
             end_loop = True
             window_up = max(wav_and_flux_arr[0])
-        #print 'Window from  %0.2f  to  %0.2f  Angstroms' % (window_lo, window_up)
+        print 'Window from  %0.2f  to  %0.2f  Angstroms' % (window_lo, window_up)
         f_win = wav_and_flux_arr[1][(wav_and_flux_arr[0] >= window_lo) & (wav_and_flux_arr[0] <= window_up)]
         norm_flxs = f_win / normalize2
         #print 'got window fluxes and normalized them!'
         rounded_fluxes = numpy.around(norm_flxs, decimals)
         flux_mode = stats.mode(rounded_fluxes, axis=None)
-        #print 'flux mode, thresold_fraction, flux_mode*thresold_fraction: ', flux_mode, flux_mode[0]*normalize2, thresold_fraction, (flux_mode[0]*normalize2)*thresold_fraction   
+        print 'flux mode, thresold_fraction, flux_mode*thresold_fraction: ', flux_mode, flux_mode[0]*normalize2, thresold_fraction, (flux_mode[0]*normalize2)*thresold_fraction   
         local_threshold = flux_mode[0] * normalize2
         local_trimed_flux = get_sigma_clipped_flux(wav_and_flux_arr, local_threshold, thresold_fraction)
         numpy.append(trimed_flux, local_trimed_flux)    
