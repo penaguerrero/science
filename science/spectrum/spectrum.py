@@ -56,10 +56,14 @@ def iterate_sigma_clipdflx_usingMode(flx_arr, sigmas_away):
     temp_f = flx_arr / normalize2
     decimals = 2
     rounded_f = numpy.around(temp_f, decimals)
+    original_flux_mode = stats.mode(rounded_f, axis=None)
+    for f in rounded_f:
+        if f == max(rounded_f) or f == min(rounded_f):
+            f = float(original_flux_mode[0])
     flux_mode = stats.mode(rounded_f, axis=None)
-    #print 'flux_mode', flux_mode
+    print 'flux_mode', flux_mode
     std = flux_mode[0] * normalize2
-    #print 'sigma = ', std
+    print 'sigma = ', std
     clip_up = sigmas_away
     clip_down = (-1) * sigmas_away
     i = 1
@@ -68,9 +72,9 @@ def iterate_sigma_clipdflx_usingMode(flx_arr, sigmas_away):
     if std == 0.0:
         end_loop = True
         std =  numpy.median(flx_arr)
-        #print 'Mode is zero, used median as std:', std
+        print 'Mode is zero, used median as std:', std
         n_arr = flx_arr / std
-        flx_clip = numpy.clip(n_arr, clip_down, clip_up) * std
+        flx_clip = numpy.clip(n_arr, clip_down*20, clip_up*20) * std
         return std, flx_clip
     # If the mode is not zero try to find standard deviation
     norm_flux = flx_arr / std
@@ -80,22 +84,26 @@ def iterate_sigma_clipdflx_usingMode(flx_arr, sigmas_away):
         prev_std = std
         new_flx = flx_clip
         std, flx_clip = sigma_clip_flux(new_flx, sigmas_away)
-        #print 'sigma = ', std
+        print 'sigma = ', std
         # did it converge?
         std_diff = numpy.fabs(prev_std - std)
         #print 'std_diff = ', std_diff
         if std_diff == 0.0:
             end_loop = True
         # In case the function cannot converge, use mode flux as standard deviation
-        elif (std_diff <= (flux_mode[0]*normalize2)*10) or (std == 0.0):
+        elif (std_diff <= (flux_mode[0]*normalize2)) or (std == 0.0):
             end_loop = True
             std = float(flux_mode[0] * normalize2)         
-            #print 'Did not converge, used flux mode as std: ', std
+            print 'Did not converge, used flux mode as std: ', std
             n_arr = flx_arr / std
             flx_clip = numpy.clip(n_arr, clip_down, clip_up) * std
             #print 'std_diff', std_diff 
         i = i + 1
-    #print 'Number of iterations: ', i
+        # Stop the loop in case none of the other conditions are met
+        if i > 1000:
+            print 'Reached maximum iterations without meeting the other conditions.'
+            end_loop = True
+    print 'Number of iterations: ', i
     return std, flx_clip
 
 def get_spec_sigclip(object_spec, window, sigmas_away):
@@ -113,7 +121,7 @@ def get_spec_sigclip(object_spec, window, sigmas_away):
     # First window
     window_lo = object_spec[0][0]
     window_up, _ = find_nearest(object_spec[0], window_lo+window)
-    #print 'INITIAL Window: ', window_lo, window_up
+    print 'INITIAL Window: ', window_lo, window_up
     f_win = object_spec[1][(object_spec[0] <= window_up)]
     std, flx_clip = iterate_sigma_clipdflx_usingMode(f_win, sigmas_away)
     #print 'sigma = ', std
@@ -137,7 +145,7 @@ def get_spec_sigclip(object_spec, window, sigmas_away):
         else:
             end_loop = True
             window_up = max(object_spec[0])
-        #print 'Window: ', window_lo, window_up
+        print 'Window: ', window_lo, window_up
         f_win = object_spec[1][(object_spec[0] > window_lo) & (object_spec[0] <= window_up)]
         std, flx_clip = iterate_sigma_clipdflx_usingMode(f_win, sigmas_away)
         #print 'sigma = ', std
@@ -212,7 +220,7 @@ def clip_flux_using_modes(object_spec, window, threshold_fraction):
     clipd_arr = numpy.array([object_spec[0], clipd_fluxes_list])
     return clipd_arr
 
-def fit_continuum(object_name, object_spectra, z, order=5, sigmas_away=3.0, window=200, plot=True, z_correct=True, normalize=True):
+def fit_continuum(object_name, object_spectra, z, order=5, sigmas_away=3.0, window=300, plot=True, z_correct=True, normalize=True):
     '''
     This function shifts the object's data to the rest frame (z=0). The function then fits a 
     continuum to the entire spectrum, omitting the lines windows (it interpolates 
@@ -247,12 +255,17 @@ def fit_continuum(object_name, object_spectra, z, order=5, sigmas_away=3.0, wind
     polynomial = numpy.poly1d(coefficients)
     f_pol = polynomial(wf[0])
     fitted_continuum = numpy.array([wf[0], f_pol])
+    '''
+    #print 'object_spectra[1][0], wf[1][0], fitted_continuum[1][0]', object_spectra[1][0], wf[1][0], fitted_continuum[1][0]
+    ###### USE THIS PART WHEN WANTING TO COMPARE WITH THE FLUX-MODE CLIPPING
     ### Alternatively, use the flux mode to clip
     mode_wf = clip_flux_using_modes(corr_wf, window, threshold_fraction=2.0)
     coefficients_mode = numpy.polyfit(wf[0], wf[1], order)
     polynomial_mode = numpy.poly1d(coefficients_mode)
     f_pol_mode = polynomial_mode(wf[0])
     fitted_continuum_mode = numpy.array([wf[0], f_pol_mode])    
+    #print 'object_spectra[1][0], wf[1][0], fitted_continuum_mode[1][0]', object_spectra[1][0], wf[1][0], fitted_continuum_mode[1][0]
+    '''
     # Plot if asked to
     if plot == True:
         pyplot.title(object_name)
@@ -260,7 +273,7 @@ def fit_continuum(object_name, object_spectra, z, order=5, sigmas_away=3.0, wind
         pyplot.xlabel('Wavelength [$\AA$]')
         pyplot.ylabel('Flux [ergs/s/cm$^2$/$\AA$]')    
         pyplot.plot(corr_wf[0], corr_wf[1], 'k', wf[0], wf[1], 'b', fitted_continuum[0], fitted_continuum[1], 'r')
-        pyplot.plot(mode_wf[0], mode_wf[1], 'g', fitted_continuum_mode[0],fitted_continuum_mode[1],'k--')
+        #pyplot.plot(mode_wf[0], mode_wf[1], 'g', fitted_continuum_mode[0],fitted_continuum_mode[1],'k--')
         pyplot.show()
         # Normalize to that continuum if norm=True
         print 'Continuum calculated. Normalization to continuum was set to: ', normalize
