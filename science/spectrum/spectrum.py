@@ -2,7 +2,6 @@ import numpy
 import math
 import os
 import logging
-import copy
 from scipy import ndimage
 from pprint import pprint
 from scipy import stats
@@ -12,98 +11,208 @@ from matplotlib import pyplot
 #@autojit
 ############################################################################################
 # FITTING A CONTINUUM WITH SIGMA-CLIPPING
-def get_sigma_clipped_flux(wav_and_flux_arr, threshold, threshold_fraction):
-    '''
-    This function interpolates the fluxes within the desiderd band.
-    REQUIREMENTS:
-    # wav_and_flux_arr = The 2D array of wavelemgth and flux.
-    # threshold = the limit value to delimit the band.
-    FUNCTION RETURNS:
-    # the flux array of the interpolated fluxes within the band
-    '''
-    # The band is given by the  
-    threshold_up = numpy.fabs(threshold*2) * threshold_fraction
-    threshold_down = numpy.fabs(threshold*threshold_fraction) * (-1)
-    trimed_flux = copy.deepcopy(wav_and_flux_arr[1])
-    sigma_clipped_flux = []
-    for i in range(len(trimed_flux)):
-        # if flux is OUTSIDE threshold band
-        if (trimed_flux[i] > threshold_up):
-            sigma_clipped_flux.append(threshold_up)
-        elif (trimed_flux[i] < threshold_down):
-            sigma_clipped_flux.append(threshold_down)
-        else:
-            #print 'flux %e  inside of band: threshold_down %e to threshold_up %e' % (trimed_flux[i],threshold_down,threshold_up )
-            sigma_clipped_flux.append(trimed_flux[i])            
-    return sigma_clipped_flux
 
-def get_trimed_wavflx_arr(wav_and_flux_arr, window_wdith, thresold_fraction):
+def find_std(arr):
     '''
-    This function gets the windows of the window_width variable size in order to find the
-    flux mode of that window.
-    REQUIREMENTS:
-    # wav_and_flux_arr = The 2D array of wavelemgth and flux.
-    # window_width = the size of the spectrum window to be analyzed.
-    # thresold_fraction = the width of the flux band in which to allow interpolation
+    This function determines the standard deviation of the given array.
+    '''
+    N = float(len(arr))
+    mean = numpy.sum(arr) / N
+    diff2meansq_list = []
+    for a in arr:
+        diff = a - mean
+        diffsq = diff * diff
+        diff2meansq_list.append(diffsq)
+    std = ( 1/(N-1) * sum(diff2meansq_list) )**(0.5)
+    #print 'sigma = ', std
+    return std
+
+def sigma_clip_flux(flux_arr, sigmas_away):
+    '''
+    This function performs the clipping normalizing to sigma and according to the
+    number of sigmas_away (i.e. the confidence level). It determines the standard
+    deviation from the given array.
     FUNCTION RETURNS:
-    # The 2D wavelength and trimed flux array
+        1. standard deviation
+        2. the sigma-clipped array
     '''
-    print '    Trimming flux to calculate continuum...'
-    # First window
-    window_lo = min(wav_and_flux_arr[0])    
-    window_up, _ = find_nearest(wav_and_flux_arr[0], window_lo+window_wdith)
-    print 'Window from  %0.2f  to  %0.2f  Angstroms' % (window_lo, window_up)
-    f_win = wav_and_flux_arr[1][(wav_and_flux_arr[0] >= window_lo) & (wav_and_flux_arr[0] <= window_up)]
-    normalize2 = 1e-15
-    norm_flxs = f_win / normalize2
+    std = find_std(flux_arr)
+    norm_flx = flux_arr /std
+    clip_up = sigmas_away
+    clip_down = (-1) * sigmas_away
+    flx_clip = numpy.clip(norm_flx, clip_down, clip_up)
+    return std, flx_clip*std
+
+def iterate_sigma_clipdflx_usingMode(flx_arr, sigmas_away):
+    '''
+    This function does the iterations to converge to a standard deviation and then
+    perform the sigma-clipping. If it cannot converge then it uses the flux mode as
+    the standard deviation and then it clips.
+    FUNCTION RETURNS:
+        1. Standard deviation (or flux mode).
+        2. Clipped flux array.
+    '''
+    normalize2 = 1e-14
+    temp_f = flx_arr / normalize2
     decimals = 2
-    rounded_fluxes = numpy.around(norm_flxs, decimals)
-    flux_mode = stats.mode(rounded_fluxes, axis=None)
-    #print 'flux mode: ', flux_mode, flux_mode[0] * normalize2,
-    #print 'thresold_fraction', thresold_fraction
-    #print 'flux_mode = threshold*thresold_fraction = ',  (flux_mode[0]*normalize2) * thresold_fraction
-    # Remove the fluxes higher or lower than the threshold
-    normalized_copy = copy.deepcopy(norm_flxs)
-    max_flx = max(normalized_copy)
-    min_flx = min(normalized_copy)
-    normalized_copy_mode = flux_mode[0]
+    rounded_f = numpy.around(temp_f, decimals)
+    flux_mode = stats.mode(rounded_f, axis=None)
+    #print 'flux_mode', flux_mode
+    std = flux_mode[0] * normalize2
+    #print 'sigma = ', std
+    clip_up = sigmas_away
+    clip_down = (-1) * sigmas_away
+    i = 1
+    end_loop = False
+    # Prevent dividing by zero
+    if std == 0.0:
+        end_loop = True
+        std =  numpy.median(flx_arr)
+        #print 'Mode is zero, used median as std:', std
+        n_arr = flx_arr / std
+        flx_clip = numpy.clip(n_arr, clip_down, clip_up) * std
+        return std, flx_clip
+    # If the mode is not zero try to find standard deviation
+    norm_flux = flx_arr / std
+    flx_clip = numpy.clip(norm_flux, clip_down, clip_up) * std
+    # Do iterations
+    while end_loop == False:
+        prev_std = std
+        new_flx = flx_clip
+        std, flx_clip = sigma_clip_flux(new_flx, sigmas_away)
+        #print 'sigma = ', std
+        # did it converge?
+        std_diff = numpy.fabs(prev_std - std)
+        #print 'std_diff = ', std_diff
+        if std_diff == 0.0:
+            end_loop = True
+        # In case the function cannot converge, use mode flux as standard deviation
+        elif (std_diff <= (flux_mode[0]*normalize2)*10) or (std == 0.0):
+            end_loop = True
+            std = float(flux_mode[0] * normalize2)         
+            #print 'Did not converge, used flux mode as std: ', std
+            n_arr = flx_arr / std
+            flx_clip = numpy.clip(n_arr, clip_down, clip_up) * std
+            #print 'std_diff', std_diff 
+        i = i + 1
+    #print 'Number of iterations: ', i
+    return std, flx_clip
 
-    '''    
-    local_threshold = flux_mode[0] * normalize2
-    # Make sure that the edges do not take the continuum to zero
-    if local_threshold <= 0.0:
-        local_threshold = numpy.median(rounded_fluxes)*normalize2
-        print 'the local_threshold was the median: %e' % (local_threshold)
-    else:
-        print 'this is the local_threshold: %e' % (local_threshold)
-    trimed_flux = get_sigma_clipped_flux(wav_and_flux_arr, local_threshold, thresold_fraction)
-    ''' 
-    # Nexts windows
+def get_spec_sigclip(object_spec, window, sigmas_away):
+    '''
+    This function does the sigma-clip iterations over the given spectrum dividing it 
+    in several windows.
+    REQUIREMENTS:
+        1. object_spec = 2D array of wavelength and flux.
+        2. window = width of the windows in which to divide the spectrum.
+        3. sigma_away = the desired confidence interval (1sigma=68.26895%, 2sigma=95.44997%, 
+            3sigma=99.73002%, 4sigma=99.99366%, 5sigma=99.99994%)
+    FUNCTION RETURNS:
+        1. Full sigma-clipped 2D array of wavelengths and flux.
+    '''
+    # First window
+    window_lo = object_spec[0][0]
+    window_up, _ = find_nearest(object_spec[0], window_lo+window)
+    #print 'INITIAL Window: ', window_lo, window_up
+    f_win = object_spec[1][(object_spec[0] <= window_up)]
+    std, flx_clip = iterate_sigma_clipdflx_usingMode(f_win, sigmas_away)
+    #print 'sigma = ', std
+    # List all the standard deviations
+    std_list = []
+    std_list.append(std)
+    # Add the clipped fluxes
+    clipd_fluxes_list = []
+    for f in flx_clip:
+        clipd_fluxes_list.append(f)
+    # Following windows
     end_loop = False
     while end_loop == False:
         window_lo = window_up
-        wup_increment = window_up + window_wdith
-        # Make sure that the upper wavelength exists in the array
-        if wup_increment <= max(wav_and_flux_arr[0]):
-            window_up, _ = find_nearest(wav_and_flux_arr[0], wup_increment)
+        wup_increment = window_up + window
+        # Make sure that the last window is not tiny
+        dist2end = max(object_spec[0]) - window_up
+        #print 'dist2end', dist2end
+        if (wup_increment < max(object_spec[0])) and (dist2end >= window+100.0):
+            window_up, _ = find_nearest(object_spec[0], wup_increment)
         else:
             end_loop = True
-            window_up = max(wav_and_flux_arr[0])
-        print 'Window from  %0.2f  to  %0.2f  Angstroms' % (window_lo, window_up)
-        f_win = wav_and_flux_arr[1][(wav_and_flux_arr[0] >= window_lo) & (wav_and_flux_arr[0] <= window_up)]
-        norm_flxs = f_win / normalize2
-        #print 'got window fluxes and normalized them!'
-        rounded_fluxes = numpy.around(norm_flxs, decimals)
-        flux_mode = stats.mode(rounded_fluxes, axis=None)
-        print 'flux mode, thresold_fraction, flux_mode*thresold_fraction: ', flux_mode, flux_mode[0]*normalize2, thresold_fraction, (flux_mode[0]*normalize2)*thresold_fraction   
-        local_threshold = flux_mode[0] * normalize2
-        local_trimed_flux = get_sigma_clipped_flux(wav_and_flux_arr, local_threshold, thresold_fraction)
-        numpy.append(trimed_flux, local_trimed_flux)    
-    # Create the wavelength and trimed fluxes array
-    trimed_wav_and_flux_arr = numpy.array([wav_and_flux_arr[0], trimed_flux])
-    return trimed_wav_and_flux_arr
+            window_up = max(object_spec[0])
+        #print 'Window: ', window_lo, window_up
+        f_win = object_spec[1][(object_spec[0] > window_lo) & (object_spec[0] <= window_up)]
+        std, flx_clip = iterate_sigma_clipdflx_usingMode(f_win, sigmas_away)
+        #print 'sigma = ', std
+        for f in flx_clip:
+            clipd_fluxes_list.append(f)
+    std_list.append(std)
+    #print 'std_list', std_list
+    clipd_arr = numpy.array([object_spec[0], clipd_fluxes_list])
+    return clipd_arr
 
-def fit_continuum(object_name, object_spectra, z, nth=5, thresold_fraction=1.0, window_wdith=150, plot=True, normalize=True):
+def find_mode_and_clip(flux_arr, threshold_fraction):
+    # Find the mode in the rounded array -- just to make it easier
+    normalize2 = 1e-15
+    temp_f = flux_arr / normalize2
+    decimals = 2
+    rounded_f = numpy.around(temp_f, decimals)
+    flux_mode = stats.mode(rounded_f, axis=None)
+    # Make sure the mode is not zero
+    if flux_mode[0] == 0.0:
+        threshold = numpy.median(flux_arr) * normalize2
+    else:
+        threshold = float(flux_mode[0]) * normalize2
+    #print 'Threshold = ', threshold
+    # Normalize to the mode or median
+    norm_flux = flux_arr / threshold
+    clip_down = (-1) * threshold_fraction
+    clip_up = threshold_fraction
+    flux_clipd = numpy.clip(norm_flux, clip_down, clip_up)
+    return flux_clipd * threshold
+
+def clip_flux_using_modes(object_spec, window, threshold_fraction):
+    '''
+    This function does the mode-clip iterations over the given spectrum dividing it 
+    in several windows.
+    REQUIREMENTS:
+        1. object_spec = 2D array of wavelength and flux.
+        2. window = width of the windows in which to divide the spectrum.
+        3. threshold_fraction = percentage of the flux mode to use for the clipping range.
+    FUNCTION RETURNS:
+        1. Full mode-clipped 2D array of wavelengths and flux.
+    '''
+    # First window
+    window_lo = object_spec[0][0]
+    window_up, _ = find_nearest(object_spec[0], window_lo+window)
+    #print 'INITIAL Window: ', window_lo, window_up
+    f_win = object_spec[1][(object_spec[0] <= window_up)]
+    # Find the mode
+    flux_clipd = find_mode_and_clip(f_win, threshold_fraction)
+    # Add the clipped fluxes
+    clipd_fluxes_list = []
+    for f in flux_clipd:
+        clipd_fluxes_list.append(f)
+    # Following windows
+    end_loop = False
+    while end_loop == False:
+        window_lo = window_up
+        wup_increment = window_up + window
+        # Make sure that the last window is not tiny
+        dist2end = max(object_spec[0]) - window_up
+        #print 'dist2end', dist2end
+        if (wup_increment < max(object_spec[0])) and (dist2end >= window+100.0):
+            window_up, _ = find_nearest(object_spec[0], wup_increment)
+        else:
+            end_loop = True
+            window_up = max(object_spec[0])
+        #print 'Window: ', window_lo, window_up
+        f_win = object_spec[1][(object_spec[0] > window_lo) & (object_spec[0] <= window_up)]
+        # Find the mode
+        flux_clipd = find_mode_and_clip(f_win, threshold_fraction)
+        for f in flux_clipd:
+            clipd_fluxes_list.append(f)
+    clipd_arr = numpy.array([object_spec[0], clipd_fluxes_list])
+    return clipd_arr
+
+def fit_continuum(object_name, object_spectra, z, order=5, sigmas_away=3.0, window=200, plot=True, z_correct=True, normalize=True):
     '''
     This function shifts the object's data to the rest frame (z=0). The function then fits a 
     continuum to the entire spectrum, omitting the lines windows (it interpolates 
@@ -123,16 +232,27 @@ def fit_continuum(object_name, object_spectra, z, nth=5, thresold_fraction=1.0, 
     '''
     print 'Calculating continuum...'
     # Bring the object to rest wavelenght frame using 1+z = lambda_obs/lambda_theo - 1
-    w_corr = object_spectra[0] / (1+float(z))
+    if z_correct == True:
+        print '    *** Wavelengths corrected for redshift.'
+        w_corr = object_spectra[0] / (1+float(z))
+    else:
+        print '    *** Wavelengths NOT YET redshifted...'
+        w_corr = object_spectra[0]
     #DIVIDE THE SPECTRUM INTO SMALLER WINDOWS TO FIND THE LOCAL MODE
     # this is the array to find the continuum with
     corr_wf = numpy.array([w_corr, object_spectra[1]])
-    wf = get_trimed_wavflx_arr(corr_wf, window_wdith, thresold_fraction)
+    wf = get_spec_sigclip(corr_wf, window, sigmas_away)
     # Polynolial of the form y = Ax^5 + Bx^4 + Cx^3 + Dx^2 + Ex + F
-    coefficients = numpy.polyfit(wf[0], wf[1], nth)
+    coefficients = numpy.polyfit(wf[0], wf[1], order)
     polynomial = numpy.poly1d(coefficients)
     f_pol = polynomial(wf[0])
     fitted_continuum = numpy.array([wf[0], f_pol])
+    ### Alternatively, use the flux mode to clip
+    mode_wf = clip_flux_using_modes(corr_wf, window, threshold_fraction=2.0)
+    coefficients_mode = numpy.polyfit(wf[0], wf[1], order)
+    polynomial_mode = numpy.poly1d(coefficients_mode)
+    f_pol_mode = polynomial_mode(wf[0])
+    fitted_continuum_mode = numpy.array([wf[0], f_pol_mode])    
     # Plot if asked to
     if plot == True:
         pyplot.title(object_name)
@@ -140,6 +260,7 @@ def fit_continuum(object_name, object_spectra, z, nth=5, thresold_fraction=1.0, 
         pyplot.xlabel('Wavelength [$\AA$]')
         pyplot.ylabel('Flux [ergs/s/cm$^2$/$\AA$]')    
         pyplot.plot(corr_wf[0], corr_wf[1], 'k', wf[0], wf[1], 'b', fitted_continuum[0], fitted_continuum[1], 'r')
+        pyplot.plot(mode_wf[0], mode_wf[1], 'g', fitted_continuum_mode[0],fitted_continuum_mode[1],'k--')
         pyplot.show()
         # Normalize to that continuum if norm=True
         print 'Continuum calculated. Normalization to continuum was set to: ', normalize
@@ -157,6 +278,7 @@ def fit_continuum(object_name, object_spectra, z, nth=5, thresold_fraction=1.0, 
         return norm_wf, norm_continuum
     else:
         return corr_wf, fitted_continuum
+
 
 ############################################################################################
 # LINE INFORMATION
