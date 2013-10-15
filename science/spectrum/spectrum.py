@@ -12,20 +12,7 @@ from matplotlib import pyplot
 ############################################################################################
 # FITTING A CONTINUUM WITH SIGMA-CLIPPING
 
-def find_std(arr):
-    '''
-    This function determines the standard deviation of the given array.
-    '''
-    N = float(len(arr))
-    mean = numpy.sum(arr) / N
-    diff2meansq_list = []
-    for a in arr:
-        diff = a - mean
-        diffsq = diff * diff
-        diff2meansq_list.append(diffsq)
-    std = ( 1/(N-1) * sum(diff2meansq_list) )**(0.5)
-    #print 'sigma = ', std
-    return std
+# The find_std function that determines the standard deviation is in the error functions section of this file
 
 def sigma_clip_flux(flux_arr, sigmas_away):
     '''
@@ -381,21 +368,21 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
             #print 'Wavelength > 2000, keeping air'
             wavs_air.append(w)
             
-    # Determine the strength of the lines: no=5A, weak=7, medium=13, yes=20, super=30
+    # Determine the strength of the lines: no_and_weak(nw)=5A, no(with respect to strong lines)=7, weak=10, medium=15, yes=25, super=35
     width = []
     for sline in strong_line:
         if sline == "nw":
-            s = 3.0
-        elif sline == "no":
             s = 5.0
-        elif sline == "weak":
+        elif sline == "no":
             s = 7.0
+        elif sline == "weak":
+            s = 10.0
         elif sline == "medium":
-            s = 13.0
+            s = 15.0
         elif sline == "yes":
-            s = 20.0
+            s = 25.0
         elif sline == "super":
-            s = 30.0
+            s = 35.0
         width.append(s)
     # Search in the object given for the lines in the lines_catalog
     lines_catalog = (wavs_air, wavs_vacuum, element, ion, forbidden, how_forbidden, transition, width)
@@ -439,6 +426,7 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
             found_ion.append(lines_catalog[3][i])
             found_ion_forbidden.append(lines_catalog[4][i])
             found_ion_how_forbidden.append(lines_catalog[5][i])
+            
     # Create the table of Net Fluxes and EQWs
     if text_table == True:
         #linesinfo_file_name = raw_input('Please type name of the .txt file containing the line info. Use the full path.')
@@ -488,7 +476,7 @@ def theo_cont(wave_arr, scale_factor=1.0):
     theoretical_cont = numpy.array([wave_arr, cont_temp]) 
     return theoretical_cont
 
-# EQUIVALENT WIDTH FUNCTIONS 
+#### EQUIVALENT WIDTH FUNCTIONS 
 def EQW_line_fixed(line_arr, line_cont, line, width=10.0):
     '''
     This function determines the EW integrating over a fixed interval.
@@ -747,52 +735,39 @@ def EQW_initial_guessVG(data_arr, cont_arr, line, Teff, guessed_EQW=1):
     print('Final array-with of expected_eqw = %f' % (final_width))
     return(VG_eqw_object, test_eqw, test_lolim, test_uplim)
 
-
-'''### THE FOLLOWING 3 FUNCTIONS WORK TOGETHER TO FIND THE BEST GAUSSIAN FIT TO THE LINE ###'''
-'''1'''
-def model(x, continuum, coeffs):    
-    # x is the variable
-    # continuum    noise
-    # coeffs=[0]   amplitude
-    # coeffs=[1]   mean or center
-    # coeffs[2]    width or std deviation
-    return continuum - coeffs[0] * numpy.exp( - ((x-coeffs[1])/coeffs[2])**2 )
-'''2'''
-def residuals(coeffs, continuum, y, x):
-    return y - model(x, continuum, coeffs)
-'''3'''
-def gaus_fit(line_arr, line_cont, amplitude, center, sig):
-    # The line array and continuum array must be tuples of wavelength and flux
-    # sig=coeff[2] is the sigma, width, or standard deviation
-    # The actual equation for a gaussian curve
-    gaussian = lambda x, continuum: continuum + amplitude * numpy.exp(-((x-center)/sig)**2)
-    gaussian_fit = gaussian(line_arr[0], line_cont[1])
-    #print('The gaussian fit is', gaussian_fit)
-    return (gaussian_fit)
-
-'''
-# THIS FUNCTION WORKS BUT DOES NOT GIVE THE CORRECT FIT
-def gaus_fit(line_arr):
-    # This function can be runned after the find_line function
-    # The line array must be a tuple of wavelength and flux
-    mean_x = sum(line_arr[0])/(line_arr[0].size)
-    sig = math.sqrt(abs(sum((line_arr[0] - mean_x)**2 * line_arr[0])/sum(line_arr[0]))) 
-    # sig is the sigma, width, or standard deviation
-    cent_y = line_arr[1].max()
-    cent_x = line_arr[0][line_arr[1]==cent_y]
-    center = (cent_x, cent_y)
-    # The actual equation for a gaussian curve
-    gaussian = lambda t : cent_y * ( 1/(sig*((2*math.pi)**0.5)) * numpy.exp(-((t-mean_x)/sig)**2) )
-    gaussian_fit = gaussian(line_arr[0])
-    print('The gaussian fitt is', gaussian_fit)
-    return (gaussian_fit, sig, center)
-'''
-
+#### Full width half maximum 
 def FWHM(sig):
     # This can only be runned after the gaus_fit function
     fwhm = 2 * (2 * math.log1p(2))**0.5 * sig
     print ('FWHM = ', fwhm)
     return fwhm
+
+#### Error functions
+def find_std(arr):
+    '''
+    This function determines the standard deviation of the given array.
+    '''
+    N = float(len(arr))
+    mean = numpy.sum(arr) / N
+    diff2meansq_list = []
+    for a in arr:
+        diff = a - mean
+        diffsq = diff * diff
+        diff2meansq_list.append(diffsq)
+    std = ( 1/(N-1) * sum(diff2meansq_list) )**(0.5)
+    #print 'sigma = ', std
+    return std
+
+def absolute_err(measurement, true_value):
+    '''This function finds the absolute value of the error given the measurement and true values.'''
+    abs_err = numpy.fabs(numpy.fabs(measurement) - numpy.fabs(true_value))
+    return abs_err
+
+def relative_err(measurement, true_value):
+    '''This function finds the fractional error given the measurement and true values. It returns a percentage.'''
+    rel_err = ( absolute_err(measurement, true_value) / numpy.fabs(true_value) ) * 100
+    return rel_err
+
 
 ############################################################################################
 # REBINNING FUNCTIONS AND RESOLVING POWER
