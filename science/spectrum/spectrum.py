@@ -59,11 +59,12 @@ def iterate_sigma_clipdflx_usingMode(flx_arr, sigmas_away):
     original_flux_mode = stats.mode(rounded_f, axis=None)
     for f in rounded_f:
         if f == max(rounded_f) or f == min(rounded_f):
+            #print 'Found a max or min: ', f
             f = float(original_flux_mode[0])
     flux_mode = stats.mode(rounded_f, axis=None)
-    print 'flux_mode', flux_mode
+    #print 'flux_mode', flux_mode
     std = flux_mode[0] * normalize2
-    print 'sigma = ', std
+    #print 'sigma = ', std
     clip_up = sigmas_away
     clip_down = (-1) * sigmas_away
     i = 1
@@ -72,9 +73,9 @@ def iterate_sigma_clipdflx_usingMode(flx_arr, sigmas_away):
     if std == 0.0:
         end_loop = True
         std =  numpy.median(flx_arr)
-        print 'Mode is zero, used median as std:', std
+        #print 'Mode is zero, used median as std:', std
         n_arr = flx_arr / std
-        flx_clip = numpy.clip(n_arr, clip_down*20, clip_up*20) * std
+        flx_clip = numpy.clip(n_arr, clip_down, clip_up) * std
         return std, flx_clip
     # If the mode is not zero try to find standard deviation
     norm_flux = flx_arr / std
@@ -84,7 +85,7 @@ def iterate_sigma_clipdflx_usingMode(flx_arr, sigmas_away):
         prev_std = std
         new_flx = flx_clip
         std, flx_clip = sigma_clip_flux(new_flx, sigmas_away)
-        print 'sigma = ', std
+        #print 'sigma = ', std
         # did it converge?
         std_diff = numpy.fabs(prev_std - std)
         #print 'std_diff = ', std_diff
@@ -94,16 +95,16 @@ def iterate_sigma_clipdflx_usingMode(flx_arr, sigmas_away):
         elif (std_diff <= (flux_mode[0]*normalize2)) or (std == 0.0):
             end_loop = True
             std = float(flux_mode[0] * normalize2)         
-            print 'Did not converge, used flux mode as std: ', std
+            #print 'Did not converge, used flux mode as std: ', std
             n_arr = flx_arr / std
             flx_clip = numpy.clip(n_arr, clip_down, clip_up) * std
             #print 'std_diff', std_diff 
         i = i + 1
         # Stop the loop in case none of the other conditions are met
         if i > 1000:
-            print 'Reached maximum iterations without meeting the other conditions.'
+            #print 'Reached maximum iterations without meeting the other conditions.'
             end_loop = True
-    print 'Number of iterations: ', i
+    #print 'Number of iterations: ', i
     return std, flx_clip
 
 def get_spec_sigclip(object_spec, window, sigmas_away):
@@ -124,7 +125,7 @@ def get_spec_sigclip(object_spec, window, sigmas_away):
     print 'INITIAL Window: ', window_lo, window_up
     f_win = object_spec[1][(object_spec[0] <= window_up)]
     std, flx_clip = iterate_sigma_clipdflx_usingMode(f_win, sigmas_away)
-    #print 'sigma = ', std
+    print 'sigma = ', std
     # List all the standard deviations
     std_list = []
     std_list.append(std)
@@ -148,7 +149,7 @@ def get_spec_sigclip(object_spec, window, sigmas_away):
         print 'Window: ', window_lo, window_up
         f_win = object_spec[1][(object_spec[0] > window_lo) & (object_spec[0] <= window_up)]
         std, flx_clip = iterate_sigma_clipdflx_usingMode(f_win, sigmas_away)
-        #print 'sigma = ', std
+        print 'sigma = ', std
         for f in flx_clip:
             clipd_fluxes_list.append(f)
     std_list.append(std)
