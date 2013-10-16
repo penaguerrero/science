@@ -768,6 +768,16 @@ def relative_err(measurement, true_value):
     rel_err = ( absolute_err(measurement, true_value) / numpy.fabs(true_value) ) * 100
     return rel_err
 
+def min_chi_square(arr):
+    '''Test if the observed values are close enough to the expected value.'''
+    estimated = sum(arr) / float(len(arr))
+    chi_square_list = []
+    for observed in arr:            
+        chi_sq = ((observed - estimated) * (observed - estimated)) / estimated
+        chi_square_list.append(chi_sq)
+    min_chi_sq = sum(chi_square_list)
+    return min_chi_sq
+
 
 ############################################################################################
 # REBINNING FUNCTIONS AND RESOLVING POWER
