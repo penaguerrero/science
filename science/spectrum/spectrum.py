@@ -139,10 +139,10 @@ def get_spec_sigclip(object_spec, window, sigmas_away):
         print 'sigma = ', std
         for f in flx_clip:
             clipd_fluxes_list.append(f)
-    std_list.append(std)
+        std_list.append(std)
     #print 'std_list', std_list
     clipd_arr = numpy.array([object_spec[0], clipd_fluxes_list])
-    return clipd_arr
+    return clipd_arr, std_list
 
 def find_mode_and_clip(flux_arr, threshold_fraction):
     # Find the mode in the rounded array -- just to make it easier
@@ -237,12 +237,15 @@ def fit_continuum(object_name, object_spectra, z, order=5, sigmas_away=3.0, wind
     #DIVIDE THE SPECTRUM INTO SMALLER WINDOWS TO FIND THE LOCAL MODE
     # this is the array to find the continuum with
     corr_wf = numpy.array([w_corr, object_spectra[1]])
-    wf = get_spec_sigclip(corr_wf, window, sigmas_away)
+    wf, std_list = get_spec_sigclip(corr_wf, window, sigmas_away)
     # Polynolial of the form y = Ax^5 + Bx^4 + Cx^3 + Dx^2 + Ex + F
     coefficients = numpy.polyfit(wf[0], wf[1], order)
     polynomial = numpy.poly1d(coefficients)
     f_pol = polynomial(wf[0])
     fitted_continuum = numpy.array([wf[0], f_pol])
+    chi2_list = test_min_chi2_of_polynomial(fitted_continuum, std_list, window)
+    avg_chi2 = sum(chi2_list) / float(len(chi2_list))
+    #print 'avg_chi2 for this polynomial: ', avg_chi2
     '''
     #print 'object_spectra[1][0], wf[1][0], fitted_continuum[1][0]', object_spectra[1][0], wf[1][0], fitted_continuum[1][0]
     ###### USE THIS PART WHEN WANTING TO COMPARE WITH THE FLUX-MODE CLIPPING
@@ -279,6 +282,39 @@ def fit_continuum(object_name, object_spectra, z, order=5, sigmas_away=3.0, wind
         return norm_wf, norm_continuum
     else:
         return corr_wf, fitted_continuum
+
+def test_min_chi2_of_polynomial(polynomialfit_arr, std_list, window):
+    # First window
+    window_lo = polynomialfit_arr[0][0]
+    window_up, _ = find_nearest(polynomialfit_arr[0], window_lo+window)
+    #print 'INITIAL Window: ', window_lo, window_up
+    pol_flxs_lists = []
+    f_win = polynomialfit_arr[1][(polynomialfit_arr[0] <= window_up)]
+    pol_flxs_lists.append(f_win)
+    # Following windows
+    end_loop = False
+    while end_loop == False:
+        window_lo = window_up
+        wup_increment = window_up + window
+        # Make sure that the last window is not tiny
+        dist2end = max(polynomialfit_arr[0]) - window_up
+        #print 'dist2end', dist2end
+        if (wup_increment < max(polynomialfit_arr[0])) and (dist2end >= window+100.0):
+            window_up, _ = find_nearest(polynomialfit_arr[0], wup_increment)
+        else:
+            end_loop = True
+            window_up = max(polynomialfit_arr[0])
+        #print 'Window: ', window_lo, window_up
+        f_win = polynomialfit_arr[1][(polynomialfit_arr[0] > window_lo) & (polynomialfit_arr[0] <= window_up)]
+        pol_flxs_lists.append(f_win)
+    chi2_list = []
+    # Find the minimal chi square of the polynomial to the standard deviations of the windows
+    for std,f_pol in zip(std_list, pol_flxs_lists):
+        # Divide the polynomial array into the same binning as the windows
+        chi2 = min_chi_square(f_pol, std)
+        print 'This is Chi_square', chi2
+        chi2_list.append(chi2)
+    return chi2_list
 
 
 ############################################################################################
@@ -426,7 +462,6 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
             found_ion.append(lines_catalog[3][i])
             found_ion_forbidden.append(lines_catalog[4][i])
             found_ion_how_forbidden.append(lines_catalog[5][i])
-            
     # Create the table of Net Fluxes and EQWs
     if text_table == True:
         #linesinfo_file_name = raw_input('Please type name of the .txt file containing the line info. Use the full path.')
@@ -444,6 +479,7 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
         for cw, w, e, i, fd, h, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, found_element, found_ion, found_ion_forbidden, found_ion_how_forbidden, width_list, net_fluxes_list, continuum_list, EWs_list):
             print ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
     return catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list
+
 
 def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav):
     '''
@@ -463,6 +499,7 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav):
     C = sum(net_continua) / len(net_continua)
     #C = numpy.median(net_continua) gives the same as the average value
     return F, C
+
 
 def theo_cont(wave_arr, scale_factor=1.0):
     '''
@@ -768,9 +805,8 @@ def relative_err(measurement, true_value):
     rel_err = ( absolute_err(measurement, true_value) / numpy.fabs(true_value) ) * 100
     return rel_err
 
-def min_chi_square(arr):
+def min_chi_square(arr, estimated):
     '''Test if the observed values are close enough to the expected value.'''
-    estimated = sum(arr) / float(len(arr))
     chi_square_list = []
     for observed in arr:            
         chi_sq = ((observed - estimated) * (observed - estimated)) / estimated
