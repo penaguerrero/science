@@ -2,6 +2,7 @@ import numpy
 import math
 import os
 import logging
+import scipy
 from scipy import ndimage
 from pprint import pprint
 from scipy import stats
@@ -243,8 +244,9 @@ def fit_continuum(object_name, object_spectra, z, order=5, sigmas_away=3.0, wind
     polynomial = numpy.poly1d(coefficients)
     f_pol = polynomial(wf[0])
     fitted_continuum = numpy.array([wf[0], f_pol])
-    chi2_list = test_min_chi2_of_polynomial(fitted_continuum, std_list, window)
-    avg_chi2 = sum(chi2_list) / float(len(chi2_list))
+    #chi2_list = find_chi2_of_polynomial(fitted_continuum, std_list, window)
+    #print chi2_list[0][0], chi2_list[0][1]
+    #avg_chi2 = sum(chi2_list) / float(len(chi2_list))
     #print 'avg_chi2 for this polynomial: ', avg_chi2
     '''
     #print 'object_spectra[1][0], wf[1][0], fitted_continuum[1][0]', object_spectra[1][0], wf[1][0], fitted_continuum[1][0]
@@ -283,7 +285,15 @@ def fit_continuum(object_name, object_spectra, z, order=5, sigmas_away=3.0, wind
     else:
         return corr_wf, fitted_continuum
 
-def test_min_chi2_of_polynomial(polynomialfit_arr, std_list, window):
+def find_chi2_of_polynomial(polynomialfit_arr, std_list, window):
+    ''' Determine if the adjusted polynomial is a good enough fit to the continuum fluxes.
+    1. Null hypothesis = there are equal number of points above and below the fitted polynomial (it passes through the middle of the data).
+    2. We expect 50% of the points above the continuum and 50% below -- the expected value is then the standard deviation that I 
+        used to define the continuum range fluxes.
+    3. The observed values are the fluxes of the trimed flux array that I defined as the continuum.
+    4. Degrees of freedom, df = 1 (in this case there are 2 outcomes, above and below the continuum, so  df = outcomes - 1).
+    '''
+    degreees_freedom = 1
     # First window
     window_lo = polynomialfit_arr[0][0]
     window_up, _ = find_nearest(polynomialfit_arr[0], window_lo+window)
@@ -310,15 +320,45 @@ def test_min_chi2_of_polynomial(polynomialfit_arr, std_list, window):
     chi2_list = []
     # Find the minimal chi square of the polynomial to the standard deviations of the windows
     for std,f_pol in zip(std_list, pol_flxs_lists):
+        # Normalize to the local standard deviation to test the null hypothesis with bigger numbers
+        # the expected value becomes 1.0 with this normalization
+        norm_f_pol = f_pol / std
+        norm_std_list = []
+        for _ in norm_f_pol:
+            norm_std_list.append(1.0)
+        norm_std = numpy.array([norm_std_list])
         # Divide the polynomial array into the same binning as the windows
-        chi2 = min_chi_square(f_pol, std)
-        print 'This is Chi_square', chi2
-        chi2_list.append(chi2)
+        chi_sq = scipy.stats.chisquare(norm_f_pol, degreees_freedom)
+        chi2_list.append(chi_sq)
+    #avg_chi2_per_window = sum(chi2_list[0])
+    
     return chi2_list
 
 
 ############################################################################################
 # LINE INFORMATION
+def get_data_from_files(object_name, add_str, specs, text_files_path):
+    nuv = object_name+add_str+"_nuv.txt"
+    opt = object_name+add_str+"_opt.txt"
+    nir = object_name+add_str+"_nir.txt"
+    full_file_list = [nuv, opt, nir]
+    # Determine what files to use
+    text_file_list = []
+    for item in specs:
+        tf = full_file_list[item]
+        text_file_list.append(tf)
+        
+    # List of the data contained in each file
+    data = []
+    for i in range(len(text_file_list)):
+        txtfile_path = os.path.join(text_files_path, text_file_list[i])
+        print 'Opening: ', txtfile_path
+        # The file is expected to be two columns without header: wavelengths, fluxes
+        data_file = numpy.loadtxt(txtfile_path, unpack=True)
+        #print 'LIMITS', data_file[0][0], max(data_file[0])
+        data.append(data_file)
+    return data, full_file_list
+
 def n4airvac_conversion(wav):
     '''This function finds the index of refraction for that wavelength.
         *** Took the equation from IAU convention for wavelength conversion described in 
@@ -805,14 +845,6 @@ def relative_err(measurement, true_value):
     rel_err = ( absolute_err(measurement, true_value) / numpy.fabs(true_value) ) * 100
     return rel_err
 
-def min_chi_square(arr, estimated):
-    '''Test if the observed values are close enough to the expected value.'''
-    chi_square_list = []
-    for observed in arr:            
-        chi_sq = ((observed - estimated) * (observed - estimated)) / estimated
-        chi_square_list.append(chi_sq)
-    min_chi_sq = sum(chi_square_list)
-    return min_chi_sq
 
 
 ############################################################################################
