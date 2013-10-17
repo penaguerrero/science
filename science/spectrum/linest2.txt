@@ -1,0 +1,47 @@
+#Wavelength    Element     Code to determine t2
+# Helium lines
+2945            He I           HELIO10
+3188            He I           HELIO10
+3614            He I           HELIO10
+3820            He I           HELIO10
+3889            He I           HELIO10
+3965            He I           HELIO10
+4026            He I           HELIO10
+4121            He I           HELIO10
+4388            He I           HELIO10
+4713            He I           HELIO10
+4922            He I           HELIO10
+5016            He I           HELIO10
+5048            He I           HELIO10
+5876            He I           HELIO10
+6678            He I           HELIO10
+7065            He I           HELIO10
+7281            He I           HELIO10
+9464            He I           HELIO10
+#
+# Oxygen lines
+1660.81         O 3]
+1666.15         O 3]
+3726.03         [O  2]
+3728.82         [O  2]
+4363.21         [O  3]
+#4638.86         O   2
+#4641.81         O   2
+4640            4639+42 O II
+#4649.13         O   2
+#4650.84         O   2
+4650            4649+51 O II
+4958.91         [O  3]
+5006.84         [O  3]
+#7318.92         [O  2]
+#7319.99         [O  2]
+7320            [O  2]
+#7329.67         [O  2]
+#7330.73         [O  2]
+7330            [O  2]
+#
+# Carbon lines
+1906.68         C 3]
+1908.73         C 3]
+4267.15         C 2
+7231            C 2
