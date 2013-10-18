@@ -337,7 +337,7 @@ def find_chi2_of_polynomial(polynomialfit_arr, std_list, window):
 
 ############################################################################################
 # LINE INFORMATION
-def get_data_from_files(object_name, add_str, specs, text_files_path):
+def get_obj_files2use(object_name, add_str, specs):
     nuv = object_name+add_str+"_nuv.txt"
     opt = object_name+add_str+"_opt.txt"
     nir = object_name+add_str+"_nir.txt"
@@ -346,8 +346,11 @@ def get_data_from_files(object_name, add_str, specs, text_files_path):
     text_file_list = []
     for item in specs:
         tf = full_file_list[item]
-        text_file_list.append(tf)
-        
+        text_file_list.append(tf)        
+    return text_file_list, full_file_list
+
+def loadtxt_from_files(object_name, add_str, specs, text_files_path):
+    text_file_list, full_file_list = get_obj_files2use(object_name, add_str, specs)
     # List of the data contained in each file
     data = []
     for i in range(len(text_file_list)):
@@ -358,6 +361,24 @@ def get_data_from_files(object_name, add_str, specs, text_files_path):
         #print 'LIMITS', data_file[0][0], max(data_file[0])
         data.append(data_file)
     return data, full_file_list
+
+def readlines_from_lineinfo(text_file_list, cols_in_file):
+    # List of the data contained in each file
+    for each_file in text_file_list:
+        f = open(each_file, 'r')
+    list_rows_of_file = f.readlines()
+    f.close()
+    for row in list_rows_of_file:
+        # Disregard comment symbol
+        if '#' not in row:
+            # Split each row into columns
+            line_data = row.split()
+            # append the element into each column in the cols_in_file
+            for item, col in zip(line_data, cols_in_file):
+                if '.' in item:
+                    item = float(item)
+                col.append(item)
+    return cols_in_file
 
 def n4airvac_conversion(wav):
     '''This function finds the index of refraction for that wavelength.
@@ -392,10 +413,7 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
     # Read the line_catalog file, assuming that the path is the same:
     # '/Users/name_of_home_directory/Documents/AptanaStudio3/science/science/spectrum/lines_catalog.txt'
     line_catalog_path = os.path.abspath('../../science/science/spectrum/lines_catalog.txt')
-    #print line_catalog_path
-    f = open(line_catalog_path, 'r')
-    list_rows_of_file = f.readlines()
-    f.close()
+    # Define the columns of the file
     wavelength = []
     element = []
     ion =[]
@@ -403,20 +421,12 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
     how_forbidden = []
     transition = []
     strong_line = []
-    for row in list_rows_of_file:
-        # Disregard comment symbol
-        if '#' not in row:
-            # Split each row into columns
-            data = row.split()
-            # data[0]=wavelength, [1]=element, [2]=ion, [3]=forbidden, 
-            #     [4]=how_forbidden, [5]=transition, [6]=strong_line
-            wavelength.append(float(data[0]))
-            element.append(data[1])
-            ion.append(data[2])
-            forbidden.append(data[3])
-            how_forbidden.append(data[4])
-            transition.append(data[5])
-            strong_line.append(data[6])
+    cols_in_file = [wavelength, element, ion, forbidden, how_forbidden, transition, strong_line]
+    # Define the list of the files to be read
+    text_file_list = [line_catalog_path]
+    # Read the files
+    data = readlines_from_lineinfo(text_file_list, cols_in_file)
+    wavelength, element, ion, forbidden, how_forbidden, transition, strong_line = data
     # If the wavelength is grater than 2000 correct the theoretical air wavelengths to vacuum using the IAU
     # standard for conversion from air to vacuum wavelengths is given in Morton (1991, ApJS, 77, 119). To
     # correct find the refraction index for that wavelength and then use:
@@ -508,7 +518,7 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
         txt_file = open(linesinfo_file_name, 'w+')
         print >> txt_file,  use_wavs_text
         print >> txt_file,   '# Positive EW = emission        Negative EW = absorption' 
-        print >> txt_file,  ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
+        print >> txt_file,  ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('#Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
         for cw, w, e, i, fd, h, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, found_element, found_ion, found_ion_forbidden, found_ion_how_forbidden, width_list, net_fluxes_list, continuum_list, EWs_list):
             print >> txt_file,  ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
         txt_file.close()
