@@ -244,10 +244,8 @@ def fit_continuum(object_name, object_spectra, z, order=5, sigmas_away=3.0, wind
     polynomial = numpy.poly1d(coefficients)
     f_pol = polynomial(wf[0])
     fitted_continuum = numpy.array([wf[0], f_pol])
-    #chi2_list = find_chi2_of_polynomial(fitted_continuum, std_list, window)
-    #print chi2_list[0][0], chi2_list[0][1]
-    #avg_chi2 = sum(chi2_list) / float(len(chi2_list))
-    #print 'avg_chi2 for this polynomial: ', avg_chi2
+    avg_chi2, chi2_list, std_arr_list = find_reduced_chi2_of_polynomial(fitted_continuum, std_list, window)
+    print avg_chi2, chi2_list
     '''
     #print 'object_spectra[1][0], wf[1][0], fitted_continuum[1][0]', object_spectra[1][0], wf[1][0], fitted_continuum[1][0]
     ###### USE THIS PART WHEN WANTING TO COMPARE WITH THE FLUX-MODE CLIPPING
@@ -267,6 +265,8 @@ def fit_continuum(object_name, object_spectra, z, order=5, sigmas_away=3.0, wind
         pyplot.ylabel('Flux [ergs/s/cm$^2$/$\AA$]')    
         pyplot.plot(corr_wf[0], corr_wf[1], 'k', wf[0], wf[1], 'b', fitted_continuum[0], fitted_continuum[1], 'r')
         #pyplot.plot(mode_wf[0], mode_wf[1], 'g', fitted_continuum_mode[0],fitted_continuum_mode[1],'k--')
+        for i in range(len(std_arr_list)):
+            pyplot.plot(std_arr_list[i][0], std_arr_list[i][1], 'g')
         pyplot.show()
         # Normalize to that continuum if norm=True
         print 'Continuum calculated. Normalization to continuum was set to: ', normalize
@@ -285,7 +285,7 @@ def fit_continuum(object_name, object_spectra, z, order=5, sigmas_away=3.0, wind
     else:
         return corr_wf, fitted_continuum
 
-def find_chi2_of_polynomial(polynomialfit_arr, std_list, window):
+def find_reduced_chi2_of_polynomial(polynomialfit_arr, std_list, window):
     ''' Determine if the adjusted polynomial is a good enough fit to the continuum fluxes.
     1. Null hypothesis = there are equal number of points above and below the fitted polynomial (it passes through the middle of the data).
     2. We expect 50% of the points above the continuum and 50% below -- the expected value is then the standard deviation that I 
@@ -293,13 +293,15 @@ def find_chi2_of_polynomial(polynomialfit_arr, std_list, window):
     3. The observed values are the fluxes of the trimed flux array that I defined as the continuum.
     4. Degrees of freedom, df = 1 (in this case there are 2 outcomes, above and below the continuum, so  df = outcomes - 1).
     '''
-    degreees_freedom = 1
     # First window
     window_lo = polynomialfit_arr[0][0]
     window_up, _ = find_nearest(polynomialfit_arr[0], window_lo+window)
     #print 'INITIAL Window: ', window_lo, window_up
+    pol_wavs_lists = []
     pol_flxs_lists = []
+    w_win = polynomialfit_arr[0][(polynomialfit_arr[0] <= window_up)]
     f_win = polynomialfit_arr[1][(polynomialfit_arr[0] <= window_up)]
+    pol_wavs_lists.append(w_win)
     pol_flxs_lists.append(f_win)
     # Following windows
     end_loop = False
@@ -315,25 +317,46 @@ def find_chi2_of_polynomial(polynomialfit_arr, std_list, window):
             end_loop = True
             window_up = max(polynomialfit_arr[0])
         #print 'Window: ', window_lo, window_up
+        w_win = polynomialfit_arr[0][(polynomialfit_arr[0] > window_lo) & (polynomialfit_arr[0] <= window_up)]
         f_win = polynomialfit_arr[1][(polynomialfit_arr[0] > window_lo) & (polynomialfit_arr[0] <= window_up)]
+        pol_wavs_lists.append(w_win)
         pol_flxs_lists.append(f_win)
-    chi2_list = []
+    # Create the array of std deviations for window
+    std_list_windows = []
+    std_arr_list = []
+    for std, w_pol in zip(std_list, pol_wavs_lists):
+        std_win = []
+        for _ in w_pol:
+            std_win.append(std)
+        std_list_windows.append(std_win)
+        std_arr = numpy.array([w_pol, std_win])
+        std_arr_list.append(std_arr)
     # Find the minimal chi square of the polynomial to the standard deviations of the windows
-    for std,f_pol in zip(std_list, pol_flxs_lists):
-        # Normalize to the local standard deviation to test the null hypothesis with bigger numbers
-        # the expected value becomes 1.0 with this normalization
-        norm_f_pol = f_pol / std
-        norm_std_list = []
-        for _ in norm_f_pol:
-            norm_std_list.append(1.0)
-        norm_std = numpy.array([norm_std_list])
+    chi2_list = []
+    for f_pol, std_win in zip(pol_flxs_lists, std_list_windows):
+        degreees_freedom = float(len(f_pol)) - 1
         # Divide the polynomial array into the same binning as the windows
-        chi_sq = scipy.stats.chisquare(norm_f_pol, degreees_freedom)
-        chi2_list.append(chi_sq)
-    #avg_chi2_per_window = sum(chi2_list[0])
-    
-    return chi2_list
+        chi_sq = find_chi2(f_pol, std_win)
+        print 'degreees_freedom = ', degreees_freedom
+        reduced_chi_sq = chi_sq / degreees_freedom
+        chi2_list.append(reduced_chi_sq)
+    avg_chi2 = sum(chi2_list) / float(len(chi2_list))
+    return avg_chi2, chi2_list, std_arr_list
 
+def find_chi2(observed_arr, expected_arr):
+    mean = sum(observed_arr) / float(len(observed_arr))
+    variance_list = []
+    for o in observed_arr:
+        variance = (o - mean)**2
+        variance_list.append(variance)
+    variance =  sum(variance_list) / float(len(observed_arr))
+    #print 'variance', variance
+    chi2 = []
+    for o, e in zip(observed_arr, expected_arr):
+        diff_squared = (o - e)**2
+        chi2.append(diff_squared) 
+    chi_squared = sum(chi2) / variance
+    return chi_squared
 
 ############################################################################################
 # LINE INFORMATION
