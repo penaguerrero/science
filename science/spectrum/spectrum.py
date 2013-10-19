@@ -209,7 +209,7 @@ def clip_flux_using_modes(object_spec, window, threshold_fraction):
     clipd_arr = numpy.array([object_spec[0], clipd_fluxes_list])
     return clipd_arr
 
-def fit_continuum(object_name, object_spectra, z, order=5, sigmas_away=3.0, window=300, plot=True, z_correct=True, normalize=True):
+def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=300, order=None, plot=True, z_correct=True, normalize=True):
     '''
     This function shifts the object's data to the rest frame (z=0). The function then fits a 
     continuum to the entire spectrum, omitting the lines windows (it interpolates 
@@ -235,26 +235,22 @@ def fit_continuum(object_name, object_spectra, z, order=5, sigmas_away=3.0, wind
     else:
         print '    *** Wavelengths NOT YET redshifted...'
         w_corr = object_spectra[0]
-    #DIVIDE THE SPECTRUM INTO SMALLER WINDOWS TO FIND THE LOCAL MODE
     # this is the array to find the continuum with
     corr_wf = numpy.array([w_corr, object_spectra[1]])
-    wf, std_list = get_spec_sigclip(corr_wf, window, sigmas_away)
-    # Polynolial of the form y = Ax^5 + Bx^4 + Cx^3 + Dx^2 + Ex + F
-    coefficients = numpy.polyfit(wf[0], wf[1], order)
-    polynomial = numpy.poly1d(coefficients)
-    f_pol = polynomial(wf[0])
-    fitted_continuum = numpy.array([wf[0], f_pol])
-    avg_chi2, chi2_list, std_arr_list = find_reduced_chi2_of_polynomial(fitted_continuum, std_list, window)
-    print avg_chi2, chi2_list
+    wf, _ = get_spec_sigclip(corr_wf, window, sigmas_away)
+    if order == None:
+        fitted_continuum, nth = get_best_polyfit(wf, window)
+        print 'order of best fit polynomial', nth
+    elif order != None:
+        fitted_continuum = fit_polynomial(wf, order)
+        avg_chi2, chi2_list, window_cont_list = find_reduced_chi2_of_polynomial(fitted_continuum, wf, window)
+        print avg_chi2, chi2_list
     '''
     #print 'object_spectra[1][0], wf[1][0], fitted_continuum[1][0]', object_spectra[1][0], wf[1][0], fitted_continuum[1][0]
     ###### USE THIS PART WHEN WANTING TO COMPARE WITH THE FLUX-MODE CLIPPING
     ### Alternatively, use the flux mode to clip
     mode_wf = clip_flux_using_modes(corr_wf, window, threshold_fraction=2.0)
-    coefficients_mode = numpy.polyfit(wf[0], wf[1], order)
-    polynomial_mode = numpy.poly1d(coefficients_mode)
-    f_pol_mode = polynomial_mode(wf[0])
-    fitted_continuum_mode = numpy.array([wf[0], f_pol_mode])    
+    fitted_continuum_mode = fit_polynomial(mode_wf, order)    
     #print 'object_spectra[1][0], wf[1][0], fitted_continuum_mode[1][0]', object_spectra[1][0], wf[1][0], fitted_continuum_mode[1][0]
     '''
     # Plot if asked to
@@ -265,13 +261,14 @@ def fit_continuum(object_name, object_spectra, z, order=5, sigmas_away=3.0, wind
         pyplot.ylabel('Flux [ergs/s/cm$^2$/$\AA$]')    
         pyplot.plot(corr_wf[0], corr_wf[1], 'k', wf[0], wf[1], 'b', fitted_continuum[0], fitted_continuum[1], 'r')
         #pyplot.plot(mode_wf[0], mode_wf[1], 'g', fitted_continuum_mode[0],fitted_continuum_mode[1],'k--')
-        for i in range(len(std_arr_list)):
-            pyplot.plot(std_arr_list[i][0], std_arr_list[i][1], 'g')
+        if order != None:
+            for cont_arr in window_cont_list:
+                pyplot.plot(cont_arr[0], cont_arr[1], 'y')
         pyplot.show()
         # Normalize to that continuum if norm=True
         print 'Continuum calculated. Normalization to continuum was set to: ', normalize
     if (normalize == True) and (plot == True):
-        norm_flux = object_spectra[1] / f_pol
+        norm_flux = object_spectra[1] / fitted_continuum[1]
         norm_wf = numpy.array([wf[0], norm_flux])
         # Give the theoretical continuum for the line finding
         norm_continuum = theo_cont(object_spectra[0])
@@ -285,13 +282,42 @@ def fit_continuum(object_name, object_spectra, z, order=5, sigmas_away=3.0, wind
     else:
         return corr_wf, fitted_continuum
 
-def find_reduced_chi2_of_polynomial(polynomialfit_arr, std_list, window):
+def get_best_polyfit(continuum_arr, window):
+    order_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    pol_fit_list = []
+    avgchi2_list = []
+    for order in order_list:
+        pol_fit = fit_polynomial(continuum_arr, order)
+        pol_fit_list.append(pol_fit)
+        avg_chi2, _, _ = find_reduced_chi2_of_polynomial(pol_fit, continuum_arr, window)
+        avgchi2_list.append(avg_chi2)
+    best_fit = min(avgchi2_list)
+    best_fit_idx = find_index_in_list(avgchi2_list, best_fit)
+    print avgchi2_list
+    return pol_fit_list[best_fit_idx], order_list[best_fit_idx]
+
+def fit_polynomial(arr, order):
+    '''
+    This function fits a polynomial to the given array.
+    arr = is 2D array of wavelengths and fluxes
+    RETURNS:
+    the 2D array of the fitted polynomial.
+    '''
+    # Polynolial of the form y = Ax^5 + Bx^4 + Cx^3 + Dx^2 + Ex + F
+    coefficients = numpy.polyfit(arr[0], arr[1], order)
+    polynomial = numpy.poly1d(coefficients)
+    f_pol = polynomial(arr[0])
+    fitted_poly = numpy.array([arr[0], f_pol])
+    return fitted_poly
+
+def find_reduced_chi2_of_polynomial(polynomialfit_arr, continuum_arr, window):
     ''' Determine if the adjusted polynomial is a good enough fit to the continuum fluxes.
     1. Null hypothesis = there are equal number of points above and below the fitted polynomial (it passes through the middle of the data).
     2. We expect 50% of the points above the continuum and 50% below -- the expected value is then the standard deviation that I 
         used to define the continuum range fluxes.
-    3. The observed values are the fluxes of the trimed flux array that I defined as the continuum.
-    4. Degrees of freedom, df = 1 (in this case there are 2 outcomes, above and below the continuum, so  df = outcomes - 1).
+    3. The observed values are the polynomial fluxes fitted to the trimed flux array that I defined as the continuum.
+    4. The expected values will be the mean values of the window fluxes of the continuum array.
+    5. Degrees of freedom, df = 1 (in this case there are 2 outcomes, above and below the continuum, so  df = outcomes - 1).
     '''
     # First window
     window_lo = polynomialfit_arr[0][0]
@@ -303,6 +329,16 @@ def find_reduced_chi2_of_polynomial(polynomialfit_arr, std_list, window):
     f_win = polynomialfit_arr[1][(polynomialfit_arr[0] <= window_up)]
     pol_wavs_lists.append(w_win)
     pol_flxs_lists.append(f_win)
+    # Define per window the expected_value_arr as the median of the trimed flux that I defined as continuum_arr
+    window_cont_list = []
+    w_cont = continuum_arr[0][(continuum_arr[0] <= window_up)]
+    f_cont = continuum_arr[1][(continuum_arr[0] <= window_up)]
+    window_cont_mean = sum(f_cont) / float(len(f_cont))
+    wc = []
+    for _ in w_cont:
+        wc.append(window_cont_mean)
+    window_continuum_mean_arr = numpy.array([w_cont, wc])
+    window_cont_list.append(window_continuum_mean_arr)
     # Following windows
     end_loop = False
     while end_loop == False:
@@ -321,27 +357,27 @@ def find_reduced_chi2_of_polynomial(polynomialfit_arr, std_list, window):
         f_win = polynomialfit_arr[1][(polynomialfit_arr[0] > window_lo) & (polynomialfit_arr[0] <= window_up)]
         pol_wavs_lists.append(w_win)
         pol_flxs_lists.append(f_win)
-    # Create the array of std deviations for window
-    std_list_windows = []
-    std_arr_list = []
-    for std, w_pol in zip(std_list, pol_wavs_lists):
-        std_win = []
-        for _ in w_pol:
-            std_win.append(std)
-        std_list_windows.append(std_win)
-        std_arr = numpy.array([w_pol, std_win])
-        std_arr_list.append(std_arr)
-    # Find the minimal chi square of the polynomial to the standard deviations of the windows
+        # Now the window median of the continuum
+        w_cont = continuum_arr[0][(continuum_arr[0] > window_lo) & (continuum_arr[0] <= window_up)]
+        f_cont = continuum_arr[1][(continuum_arr[0] > window_lo) & (continuum_arr[0] <= window_up)]
+        window_cont_mean = sum(f_cont) / float(len(f_cont))
+        wc = []
+        for _ in w_cont:
+            wc.append(window_cont_mean)
+        window_continuum_mean_arr = numpy.array([w_cont, wc])
+        window_cont_list.append(window_continuum_mean_arr)
+   
     chi2_list = []
-    for f_pol, std_win in zip(pol_flxs_lists, std_list_windows):
+    for f_pol, cont in zip(pol_flxs_lists, window_cont_list):
         degreees_freedom = float(len(f_pol)) - 1
         # Divide the polynomial array into the same binning as the windows
-        chi_sq = find_chi2(f_pol, std_win)
-        print 'degreees_freedom = ', degreees_freedom
+        chi_sq = find_chi2(f_pol, cont[1])
+        #print 'degreees_freedom = ', degreees_freedom
         reduced_chi_sq = chi_sq / degreees_freedom
         chi2_list.append(reduced_chi_sq)
     avg_chi2 = sum(chi2_list) / float(len(chi2_list))
-    return avg_chi2, chi2_list, std_arr_list
+    return avg_chi2, chi2_list, window_cont_list
+    
 
 def find_chi2(observed_arr, expected_arr):
     mean = sum(observed_arr) / float(len(observed_arr))
