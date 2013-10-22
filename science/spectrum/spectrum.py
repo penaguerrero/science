@@ -2,7 +2,7 @@ import numpy
 import math
 import os
 import logging
-import scipy
+import collections
 from scipy import ndimage
 from pprint import pprint
 from scipy import stats
@@ -114,13 +114,16 @@ def get_spec_sigclip(object_spec, window, sigmas_away):
     f_win = object_spec[1][(object_spec[0] <= window_up)]
     std, flx_clip = iterate_sigma_clipdflx_usingMode(f_win, sigmas_away)
     print 'sigma = ', std
-    # List all the standard deviations
+    # List all the standard deviations and averages
     std_list = []
-    std_list.append(std)
+    avges_list = []
+    avg_window = sum(flx_clip) / float(len(flx_clip))
     # Add the clipped fluxes
     clipd_fluxes_list = []
     for f in flx_clip:
         clipd_fluxes_list.append(f)
+        std_list.append(std)
+        avges_list.append(avg_window)
     # Following windows
     end_loop = False
     while end_loop == False:
@@ -138,12 +141,15 @@ def get_spec_sigclip(object_spec, window, sigmas_away):
         f_win = object_spec[1][(object_spec[0] > window_lo) & (object_spec[0] <= window_up)]
         std, flx_clip = iterate_sigma_clipdflx_usingMode(f_win, sigmas_away)
         print 'sigma = ', std
+        avg_window = sum(flx_clip) / float(len(flx_clip))
         for f in flx_clip:
             clipd_fluxes_list.append(f)
-        std_list.append(std)
-    #print 'std_list', std_list
+            avges_list.append(avg_window)
+            std_list.append(std)
     clipd_arr = numpy.array([object_spec[0], clipd_fluxes_list])
-    return clipd_arr, std_list
+    std_arr = numpy.array([object_spec[0], std_list])
+    avg_arr = numpy.array([object_spec[0], avges_list])
+    return clipd_arr, std_arr, avg_arr
 
 def find_mode_and_clip(flux_arr, threshold_fraction):
     # Find the mode in the rounded array -- just to make it easier
@@ -209,7 +215,7 @@ def clip_flux_using_modes(object_spec, window, threshold_fraction):
     clipd_arr = numpy.array([object_spec[0], clipd_fluxes_list])
     return clipd_arr
 
-def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=300, order=None, plot=True, z_correct=True, normalize=True):
+def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, order=None, plot=True, z_correct=True, normalize=True):
     '''
     This function shifts the object's data to the rest frame (z=0). The function then fits a 
     continuum to the entire spectrum, omitting the lines windows (it interpolates 
@@ -237,31 +243,36 @@ def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=300, o
         w_corr = object_spectra[0]
     # this is the array to find the continuum with
     corr_wf = numpy.array([w_corr, object_spectra[1]])
-    wf, _ = get_spec_sigclip(corr_wf, window, sigmas_away)
+    wf, std_arr, avg_arr = get_spec_sigclip(corr_wf, window, sigmas_away)
+    print 'numpy.shape(wf), numpy.shape(avg_arr)', numpy.shape(wf), numpy.shape(avg_arr)
     if order == None:
-        fitted_continuum, nth = get_best_polyfit(wf, window)
+        fitted_continuum, nth = get_best_polyfit(avg_arr, window)
         print 'order of best fit polynomial', nth
+        poly_order = nth
     elif order != None:
-        fitted_continuum = fit_polynomial(wf, order)
+        fitted_continuum = fit_polynomial(avg_arr, order)
         avg_chi2, chi2_list, window_cont_list = find_reduced_chi2_of_polynomial(fitted_continuum, wf, window)
         print avg_chi2, chi2_list
-    '''
-    #print 'object_spectra[1][0], wf[1][0], fitted_continuum[1][0]', object_spectra[1][0], wf[1][0], fitted_continuum[1][0]
-    ###### USE THIS PART WHEN WANTING TO COMPARE WITH THE FLUX-MODE CLIPPING
-    ### Alternatively, use the flux mode to clip
-    mode_wf = clip_flux_using_modes(corr_wf, window, threshold_fraction=2.0)
-    fitted_continuum_mode = fit_polynomial(mode_wf, order)    
-    #print 'object_spectra[1][0], wf[1][0], fitted_continuum_mode[1][0]', object_spectra[1][0], wf[1][0], fitted_continuum_mode[1][0]
-    '''
+        poly_order = order
+        '''
+        ###### USE THIS PART WHEN WANTING TO COMPARE WITH THE FLUX-MODE CLIPPING
+        ### Alternatively, use the flux mode to clip
+        mode_wf = clip_flux_using_modes(corr_wf, window, threshold_fraction=2.0)
+        fitted_continuum_mode = fit_polynomial(mode_wf, order)    
+        #print 'object_spectra[1][0], wf[1][0], fitted_continuum_mode[1][0]', object_spectra[1][0], wf[1][0], fitted_continuum_mode[1][0]
+        '''
     # Plot if asked to
     if plot == True:
         pyplot.title(object_name)
-        pyplot.suptitle('z-corrected spectra')
+        pyplot.suptitle('z-corrected spectra - polynomial of order = %s' % repr(poly_order))
         pyplot.xlabel('Wavelength [$\AA$]')
         pyplot.ylabel('Flux [ergs/s/cm$^2$/$\AA$]')    
-        pyplot.plot(corr_wf[0], corr_wf[1], 'k', wf[0], wf[1], 'b', fitted_continuum[0], fitted_continuum[1], 'r')
-        #pyplot.plot(mode_wf[0], mode_wf[1], 'g', fitted_continuum_mode[0],fitted_continuum_mode[1],'k--')
+        pyplot.plot(corr_wf[0], corr_wf[1], 'k', fitted_continuum[0], fitted_continuum[1], 'r')
+        #pyplot.plot(wf[0], wf[1], 'b')    # trimed flux used to fit continuum
+        #pyplot.plot(std_arr[0], std_arr[1], 'k--')    # average standard deviations
+        pyplot.plot(avg_arr[0], avg_arr[1], 'y')    # average of trimed flux(blue)
         if order != None:
+            #pyplot.plot(mode_wf[0], mode_wf[1], 'g--', fitted_continuum_mode[0],fitted_continuum_mode[1],'c--')
             for cont_arr in window_cont_list:
                 pyplot.plot(cont_arr[0], cont_arr[1], 'y')
         pyplot.show()
@@ -283,7 +294,7 @@ def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=300, o
         return corr_wf, fitted_continuum
 
 def get_best_polyfit(continuum_arr, window):
-    order_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    order_list = [1, 2, 3, 4, 5, 6, 7, 8, 9]
     pol_fit_list = []
     avgchi2_list = []
     for order in order_list:
@@ -293,6 +304,7 @@ def get_best_polyfit(continuum_arr, window):
         avgchi2_list.append(avg_chi2)
     best_fit = min(avgchi2_list)
     best_fit_idx = find_index_in_list(avgchi2_list, best_fit)
+    print 'These are the average reduced Chi2 values: '
     print avgchi2_list
     return pol_fit_list[best_fit_idx], order_list[best_fit_idx]
 
@@ -395,6 +407,101 @@ def find_chi2(observed_arr, expected_arr):
     return chi_squared
 
 ############################################################################################
+# GATHER TEXT FILES OF SPECTRA INTO A SINGLE FILE
+def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create_txt=True):
+    '''
+    this function gathers all the text files into a single thext file.
+    # specs_list = list of the text files to be gathered
+    # name_out_file = name of the output file with the gathered wavelengths and fluxes
+    # reject = limit of the angstroms to be rejected from the edges of the detector (default is set to 0.0=No rejections)
+    # start_w = will force the function to start the accepted array from this wavelength
+    # create_txt = if set to False the output will be just the full data into a list of lists
+    RETURNS:
+    # the text file with the gathered data
+    '''
+    accepted_catalog_wavelength = []
+    accepted_observed_wavelength = [] 
+    accepted_element = []
+    accepted_ion =[]
+    accepted_forbidden = []
+    accepted_how_forbidden = []
+    accepted_width = []
+    accepted_flux = []
+    accepted_continuum = []
+    accepted_EW = []
+    for spec in text_file_list:
+        # read the file
+        cols_in_file = readlines_from_lineinfo(spec)
+        # Each spec contains the following:
+        # 0=catalog_wavelength, 1=observed_wavelength, 2=element, 3=ion, 4=forbidden, 5=how_forbidden, 6=width, 7=flux, 8=continuum, 9=EW
+        # These are lists, make the observed wavelengths a numpy array to choose the accepted range of data
+        obs_wavs = numpy.array(cols_in_file[1])
+        if start_w == None:
+            ini_wav = obs_wavs[0]+reject
+        else:
+            # Make sure to start the right array and leave the others with the regular reject
+            if start_w < 2000.0:
+                if 'nuv' in spec:
+                    ini_wav = start_w
+                else:
+                    ini_wav = obs_wavs[0]+reject                
+            if (start_w > 2000.0) and (start_w < 5000.0):
+                if 'opt' in spec:
+                    ini_wav = start_w
+                else:
+                    ini_wav = obs_wavs[0]+reject                
+            if start_w > 5000.0:
+                if 'nir' in spec:
+                    ini_wav = start_w
+                else:
+                    ini_wav = obs_wavs[0]+reject                
+        initial_wav, initial_idx = find_nearest(obs_wavs, ini_wav)
+        ending_wav, ending_idx = find_nearest(obs_wavs, obs_wavs[-1]+reject)
+        print 'Data from %s will start at %f' % (spec, initial_wav)
+        print 'and will end at %f' % (ending_wav)
+        # Select the data by slicing
+        for i in range(len(cols_in_file[0][initial_idx : ending_idx])):
+            idx = initial_idx + i 
+            accepted_catalog_wavelength.append(cols_in_file[0][idx])
+            accepted_observed_wavelength.append(cols_in_file[1][idx])
+            accepted_element.append(cols_in_file[2][idx])
+            accepted_ion.append(cols_in_file[3][idx])
+            accepted_forbidden.append(cols_in_file[4][idx])
+            accepted_how_forbidden.append(cols_in_file[5][idx])
+            accepted_width.append(cols_in_file[6][idx])
+            accepted_flux.append(cols_in_file[7][idx])
+            accepted_continuum.append(cols_in_file[8][idx])
+            accepted_EW.append(cols_in_file[9][idx])
+    accepted_cols_in_file = [accepted_catalog_wavelength, accepted_observed_wavelength, accepted_element, accepted_ion, accepted_forbidden, 
+                             accepted_how_forbidden, accepted_width, accepted_flux, accepted_continuum, accepted_EW]
+    # Choose the right intensities if lines are repeated
+    # There are no repetitions between the NUV and Opt but there could be a few from the Opt to the NIR. 
+    # Because the sensibility of the detector is better with the g750l than with the g430l, we want to keep NIR the lines.
+    repeated_lines = collections.Counter(accepted_catalog_wavelength)
+    #print repeated_lines
+    rl_list = [i for i in repeated_lines if repeated_lines[i]>1]
+    #print 'list', rl_list
+    for rl in rl_list:
+        idx_of_line_to_be_removed = find_index_in_list(accepted_catalog_wavelength, rl)
+        if (rl > 5000.0) and (rl < 5600.0):
+            for each_list in accepted_cols_in_file:
+                # Since the line of the g430l filter will be the first occurence, remove that
+                each_list.pop(idx_of_line_to_be_removed)
+    # Create the table of Net Fluxes and EQWs
+    if create_txt == True:
+        txt_file = open(name_out_file, 'w+')
+        print >> txt_file,  '# Redshift-corrected lines'
+        print >> txt_file,   '# Positive EW = emission        Negative EW = absorption' 
+        print >> txt_file,  ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('#Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
+        for cw, w, e, i, fd, h, s, F, C, ew in zip(accepted_cols_in_file[0], accepted_cols_in_file[1], accepted_cols_in_file[2], accepted_cols_in_file[3], accepted_cols_in_file[4], 
+                                                   accepted_cols_in_file[5], accepted_cols_in_file[6], accepted_cols_in_file[7], accepted_cols_in_file[8], accepted_cols_in_file[9]):
+            print >> txt_file,  ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
+        txt_file.close()
+        print 'File   %s   writen!' % name_out_file
+    return accepted_cols_in_file
+    
+
+############################################################################################
 # LINE INFORMATION
 def get_obj_files2use(object_name, add_str, specs):
     nuv = object_name+add_str+"_nuv.txt"
@@ -421,12 +528,29 @@ def loadtxt_from_files(object_name, add_str, specs, text_files_path):
         data.append(data_file)
     return data, full_file_list
 
-def readlines_from_lineinfo(text_file_list, cols_in_file):
-    # List of the data contained in each file
-    for each_file in text_file_list:
-        f = open(each_file, 'r')
-    list_rows_of_file = f.readlines()
-    f.close()
+def readlines_from_lineinfo(text_file, cols_in_file=None):
+    if cols_in_file == None:
+        catalog_wavelength = []
+        observed_wavelength = [] 
+        element = []
+        ion =[]
+        forbidden = []
+        how_forbidden = []
+        width = []
+        flux = []
+        continuum = []
+        EW = []
+        cols_in_file = [catalog_wavelength, observed_wavelength, element, ion, forbidden, how_forbidden, width, flux, continuum, EW]
+    # List of the data contained in the file
+    if type(text_file) is list:
+        for each_file in text_file:
+            f = open(each_file, 'r')
+        list_rows_of_file = f.readlines()
+        f.close()
+    else:
+        f = open(text_file, 'r')
+        list_rows_of_file = f.readlines()
+        f.close()
     for row in list_rows_of_file:
         # Disregard comment symbol
         if '#' not in row:
@@ -517,17 +641,17 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
     width = []
     for sline in strong_line:
         if sline == "nw":
-            s = 5.0
+            s = 3.0
         elif sline == "no":
-            s = 7.0
+            s = 5.0
         elif sline == "weak":
-            s = 10.0
+            s = 7.0
         elif sline == "medium":
-            s = 15.0
+            s = 14.0
         elif sline == "yes":
-            s = 25.0
+            s = 20.0
         elif sline == "super":
-            s = 35.0
+            s = 30.0
         width.append(s)
     # Search in the object given for the lines in the lines_catalog
     lines_catalog = (wavs_air, wavs_vacuum, element, ion, forbidden, how_forbidden, transition, width)
@@ -670,7 +794,7 @@ def EQW_line_fixed(line_arr, line_cont, line, width=10.0):
     # Actually solving the eqw integral
     # my method
     difference = 1-(new_line_arr_y / new_cont_arr_y)
-    eqw = sum(difference) * dlambda* (-1)   # the -1 is because of the definition of EQW
+    eqw = sum(difference) * dlambda * (-1)   # the -1 is because of the definition of EQW
     return (eqw)
 
 def half_EQW_times2(data_arr, cont_arr, line, wave_limit, right_side=True):
@@ -695,7 +819,7 @@ def half_EQW_times2(data_arr, cont_arr, line, wave_limit, right_side=True):
 
 def EQW(data_arr, cont_arr, lower, upper):
     '''
-    This function the EW integrating over the interval given by the lower and upper limits.
+    This function detemrines the equivalent width integrating over the interval given by the lower and upper limits.
     *** THE DEFINITION OF EQW USED IS POSITIVE FOR EMISSION AND NEGATIVE FOR ABSORPTION
     # data_arr = data array that contains both wavelength and flux
     # cont_arr = continuum array that also contains both wavelength and flux
@@ -713,6 +837,7 @@ def EQW(data_arr, cont_arr, lower, upper):
     # Finding the line arrays to use in the integration
     wavelength, flux = selection(data_arr[0], data_arr[1], lolim, uplim)
     w_cont, flux_cont = selection(cont_arr[0], cont_arr[1], lolim, uplim)
+    '''
     # Interpolate if the flux selection array is empty 
     if len(flux_cont) == 0:
         x_list = []
@@ -724,7 +849,7 @@ def EQW(data_arr, cont_arr, lower, upper):
             y_list.append(y)
         w_cont = numpy.array(x_list)
         flux_cont = numpy.array(y_list)
-    # In case arrays do not have the exact same wavelengths, I am removing the second to last element
+    # In case arrays do not have the exact same wavelengths, I am rebinning the arrays to the same number of rows
     # so that the width remains the same.
     object_selection = numpy.array([wavelength, flux])
     continuum_selection = numpy.array([w_cont, flux_cont])
@@ -733,18 +858,19 @@ def EQW(data_arr, cont_arr, lower, upper):
     w = object_selection[0]
     f = object_selection[1]
     f_cont = continuum_selection[1]
+    ''' 
     # Finding the average step for the integral
-    N = len(w)
+    N = len(wavelength)
     i = 0
     diffs_list = []
     for j in range(1, N):
-        point_difference = w[j] - w[i]
+        point_difference = wavelength[j] - wavelength[i]
         diffs_list.append(point_difference)
         i = i + 1
     dlambda = sum(diffs_list) / float(N)
     # Actually solving the eqw integral
-    difference = 1 - (f / f_cont)
-    eqw = sum(difference) * dlambda * (-1)   # the -1 is because of the definition of EQW    
+    difference = 1 - (flux / flux_cont)
+    eqw = sum(difference) * dlambda * (-1)   # the -1 is because of the definition of EQW        
     return (eqw, lolim, uplim)
 
 def EQW_iter(data_arr, cont_arr, line, guessed_width=2.0):
