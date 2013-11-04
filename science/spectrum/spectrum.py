@@ -746,6 +746,41 @@ def theo_cont(wave_arr, scale_factor=1.0):
     theoretical_cont = numpy.array([wave_arr, cont_temp]) 
     return theoretical_cont
 
+#### READING SPECIFIC LINES
+def readlines_EWabsRelHbeta(text_file):
+    '''This function specifically reads the lines of the file to correct for underlying absorption: abs_EWs_rel_Hbeta.txt'''
+    # Hydrogen
+    H_lines = []
+    H_EWratios = []
+    H_info = [H_lines, H_EWratios]
+    # Helium
+    He_lines = []
+    He_EWratios = []
+    He_info = [He_lines, He_EWratios]
+    # List of the data contained in the file
+    f = open(text_file, 'r')
+    list_rows_of_file = f.readlines()
+    f.close()
+    for row in list_rows_of_file:
+        # Disregard comment symbol
+        if '#' not in row:
+            if 'Hydrogen' in row:
+                # Split each row into columns
+                line_data = row.split()
+                # append the element into each column in the Hydrogen cols_in_file
+                for item, col in zip(line_data, H_info):
+                    item = float(item)
+                    col.append(item)
+            if 'Helium' in row:
+                # Split each row into columns
+                line_data = row.split()
+                # append the element into each column in the Hydrogen cols_in_file
+                for item, col in zip(line_data, He_info):
+                    item = float(item)
+                    col.append(item)
+    return H_info, He_info
+
+
 #### EQUIVALENT WIDTH FUNCTIONS 
 def EQW_line_fixed(line_arr, line_cont, line, width=10.0):
     '''
