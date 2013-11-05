@@ -747,38 +747,37 @@ def theo_cont(wave_arr, scale_factor=1.0):
     return theoretical_cont
 
 #### READING SPECIFIC LINES
-def readlines_EWabsRelHbeta(text_file):
+def readlines_EWabsRelHbeta():
     '''This function specifically reads the lines of the file to correct for underlying absorption: abs_EWs_rel_Hbeta.txt'''
     # Hydrogen
     H_lines = []
     H_EWratios = []
-    H_info = [H_lines, H_EWratios]
     # Helium
     He_lines = []
     He_EWratios = []
-    He_info = [He_lines, He_EWratios]
-    # List of the data contained in the file
+    # List of the data contained in the file assuminf path /Users/home_directory/Documents/AptanaStudio3/science/science/spectrum/abs_EWs_rel_Hbeta.txt
+    text_file = os.path.abspath('../../science/science/spectrum/abs_EWs_rel_Hbeta.txt')
     f = open(text_file, 'r')
     list_rows_of_file = f.readlines()
     f.close()
     for row in list_rows_of_file:
         # Disregard comment symbol
         if '#' not in row:
-            if 'Hydrogen' in row:
-                # Split each row into columns
-                line_data = row.split()
+            # Split each row into columns
+            line_data = row.split()
+            wav = float(line_data[1])
+            ewabs = float(line_data[2])
+            if 'HI' in row:
                 # append the element into each column in the Hydrogen cols_in_file
-                for item, col in zip(line_data, H_info):
-                    item = float(item)
-                    col.append(item)
-            if 'Helium' in row:
-                # Split each row into columns
-                line_data = row.split()
+                H_lines.append(wav)
+                H_EWratios.append(ewabs)
+            if 'HeI' in row:
                 # append the element into each column in the Hydrogen cols_in_file
-                for item, col in zip(line_data, He_info):
-                    item = float(item)
-                    col.append(item)
-    return H_info, He_info
+                He_lines.append(wav)
+                He_EWratios.append(ewabs)
+    Hline_and_EWs = [H_lines, H_EWratios]
+    Heline_and_EWs = [He_lines, He_EWratios]
+    return Hline_and_EWs, Heline_and_EWs
 
 
 #### EQUIVALENT WIDTH FUNCTIONS 
