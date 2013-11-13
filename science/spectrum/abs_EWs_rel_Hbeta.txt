@@ -2,6 +2,7 @@
 #Element  Line   EW_abs(Line)/EW_abs(Hbeta)
 # Hydrogen
 HI        6563        0.90
+HI        4861        1.00
 HI        4340        1.05
 HI        4101        0.08
 HI        3967        0.99
