@@ -3,6 +3,7 @@ import math
 import os
 import logging
 import collections
+import string
 from scipy import ndimage
 from pprint import pprint
 from scipy import stats
@@ -246,13 +247,16 @@ def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, o
     wf, std_arr, avg_arr = get_spec_sigclip(corr_wf, window, sigmas_away)
     print 'numpy.shape(wf), numpy.shape(avg_arr)', numpy.shape(wf), numpy.shape(avg_arr)
     if order == None:
-        fitted_continuum, nth = get_best_polyfit(avg_arr, window)
+        fitted_continuum, nth, err_fit = get_best_polyfit(avg_arr, window)
         print 'order of best fit polynomial', nth
+        print 'percentage of error of continuum fit = %0.2f' % err_fit
         poly_order = nth
     elif order != None:
         fitted_continuum = fit_polynomial(avg_arr, order)
-        avg_chi2, chi2_list, window_cont_list = find_reduced_chi2_of_polynomial(fitted_continuum, wf, window)
+        avg_chi2, chi2_list, window_cont_list, err_fit = find_reduced_chi2_of_polynomial(fitted_continuum, wf, window)
+        print 'avg_chi2, chi2_list'
         print avg_chi2, chi2_list
+        print 'percentage of error of continuum fit = %0.2f' % err_fit
         poly_order = order
         '''
         ###### USE THIS PART WHEN WANTING TO COMPARE WITH THE FLUX-MODE CLIPPING
@@ -289,9 +293,9 @@ def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, o
         pyplot.ylabel('Normalized Flux')    
         pyplot.plot(norm_wf[0], norm_wf[1], 'b', norm_continuum[0], norm_continuum[1], 'r')
         pyplot.show()
-        return norm_wf, norm_continuum
+        return norm_wf, norm_continuum, err_fit
     else:
-        return corr_wf, fitted_continuum
+        return corr_wf, fitted_continuum, err_fit
 
 def get_best_polyfit(continuum_arr, window):
     order_list = [1, 2, 3, 4, 5, 6, 7, 8, 9]
@@ -300,13 +304,13 @@ def get_best_polyfit(continuum_arr, window):
     for order in order_list:
         pol_fit = fit_polynomial(continuum_arr, order)
         pol_fit_list.append(pol_fit)
-        avg_chi2, _, _ = find_reduced_chi2_of_polynomial(pol_fit, continuum_arr, window)
+        avg_chi2, _, _, err_fit = find_reduced_chi2_of_polynomial(pol_fit, continuum_arr, window)
         avgchi2_list.append(avg_chi2)
     best_fit = min(avgchi2_list)
     best_fit_idx = find_index_in_list(avgchi2_list, best_fit)
     print 'These are the average reduced Chi2 values: '
     print avgchi2_list
-    return pol_fit_list[best_fit_idx], order_list[best_fit_idx]
+    return pol_fit_list[best_fit_idx], order_list[best_fit_idx], err_fit
 
 def fit_polynomial(arr, order):
     '''
@@ -351,6 +355,10 @@ def find_reduced_chi2_of_polynomial(polynomialfit_arr, continuum_arr, window):
         wc.append(window_cont_mean)
     window_continuum_mean_arr = numpy.array([w_cont, wc])
     window_cont_list.append(window_continuum_mean_arr)
+    all_local_err_fit = []
+    # Approximate the error in the continuum fitting by number of points in window
+    local_err_fit = 1 / ((float(len(f_win)))**0.5)
+    all_local_err_fit.append(local_err_fit)
     # Following windows
     end_loop = False
     while end_loop == False:
@@ -378,7 +386,10 @@ def find_reduced_chi2_of_polynomial(polynomialfit_arr, continuum_arr, window):
             wc.append(window_cont_mean)
         window_continuum_mean_arr = numpy.array([w_cont, wc])
         window_cont_list.append(window_continuum_mean_arr)
-   
+        # Approximate the error in the continuum fitting by number of points in window
+        local_err_fit = 1 / ((float(len(f_win)))**0.5)
+        all_local_err_fit.append(local_err_fit)
+    err_fit = 1 / sum(all_local_err_fit)
     chi2_list = []
     for f_pol, cont in zip(pol_flxs_lists, window_cont_list):
         degreees_freedom = float(len(f_pol)) - 1
@@ -388,7 +399,7 @@ def find_reduced_chi2_of_polynomial(polynomialfit_arr, continuum_arr, window):
         reduced_chi_sq = chi_sq / degreees_freedom
         chi2_list.append(reduced_chi_sq)
     avg_chi2 = sum(chi2_list) / float(len(chi2_list))
-    return avg_chi2, chi2_list, window_cont_list
+    return avg_chi2, chi2_list, window_cont_list, err_fit
     
 
 def find_chi2(observed_arr, expected_arr):
@@ -429,9 +440,12 @@ def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create
     accepted_flux = []
     accepted_continuum = []
     accepted_EW = []
+    all_err_fit = []
     for spec in text_file_list:
         # read the file
         cols_in_file = readlines_from_lineinfo(spec)
+        err_cont_fit = get_err_cont_fit(spec)
+        all_err_fit.append(err_cont_fit)
         # Each spec contains the following:
         # 0=catalog_wavelength, 1=observed_wavelength, 2=element, 3=ion, 4=forbidden, 5=how_forbidden, 6=width, 7=flux, 8=continuum, 9=EW
         # These are lists, make the observed wavelengths a numpy array to choose the accepted range of data
@@ -440,7 +454,7 @@ def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create
             ini_wav = obs_wavs[0]+reject
         else:
             # Make sure to start the right array and leave the others with the regular reject
-            if start_w < 2000.0:
+            if start_w <= 2000.0:
                 if 'nuv' in spec:
                     ini_wav = start_w
                 else:
@@ -450,7 +464,7 @@ def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create
                     ini_wav = start_w
                 else:
                     ini_wav = obs_wavs[0]+reject                
-            if start_w > 5000.0:
+            if start_w >= 5000.0:
                 if 'nir' in spec:
                     ini_wav = start_w
                 else:
@@ -492,14 +506,25 @@ def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create
         txt_file = open(name_out_file, 'w+')
         print >> txt_file,  '# Redshift-corrected lines'
         print >> txt_file,   '# Positive EW = emission        Negative EW = absorption' 
-        print >> txt_file,  ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('#Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
+        print >> txt_file,   '# Percentage Errors of Continuum Fits: NUV, Opt, NIR = %0.2f, %0.2f, %0.2f' % (all_err_fit[0], all_err_fit[1], all_err_fit[2])
+        print >> txt_file,   '#    NUV: wav <= 2000,   Opt: 2000 > wav < 5000,   NIR: wav >= 5000'
+        print >> txt_file,  ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('# Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
         for cw, w, e, i, fd, h, s, F, C, ew in zip(accepted_cols_in_file[0], accepted_cols_in_file[1], accepted_cols_in_file[2], accepted_cols_in_file[3], accepted_cols_in_file[4], 
                                                    accepted_cols_in_file[5], accepted_cols_in_file[6], accepted_cols_in_file[7], accepted_cols_in_file[8], accepted_cols_in_file[9]):
             print >> txt_file,  ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
         txt_file.close()
         print 'File   %s   writen!' % name_out_file
-    return accepted_cols_in_file
+    return accepted_cols_in_file, all_err_fit
     
+def get_err_cont_fit(text_file):
+    f = open(text_file, 'r')
+    list_rows_of_file = f.readlines()
+    f.close()
+    for row in list_rows_of_file:
+        if 'Percentage Error' in row:
+            line_string_list = string.split(row, sep='=')
+            err_cont_fit = float(line_string_list[1])
+    return err_cont_fit
 
 ############################################################################################
 # LINE INFORMATION
@@ -545,8 +570,8 @@ def readlines_from_lineinfo(text_file, cols_in_file=None):
     if type(text_file) is list:
         for each_file in text_file:
             f = open(each_file, 'r')
-        list_rows_of_file = f.readlines()
-        f.close()
+            list_rows_of_file = f.readlines()
+            f.close()
     else:
         f = open(text_file, 'r')
         list_rows_of_file = f.readlines()
@@ -571,7 +596,7 @@ def n4airvac_conversion(wav):
     n = 1 + 6.4328e-5 + 2.94981e-2/(146*sigma_wav*sigma_wav) + 2.5540e-4/(41*sigma_wav*sigma_wav)
     return n
 
-def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=False, vacuum=False):
+def find_lines_info(object_spectra, continuum, err_cont_fit, linesinfo_file_name, text_table=False, vacuum=False):
     '''
     This function takes the object and continuum arrays to find the
     lines given in the lines_catalog.txt file.
@@ -701,7 +726,8 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, text_table=F
         txt_file = open(linesinfo_file_name, 'w+')
         print >> txt_file,  use_wavs_text
         print >> txt_file,   '# Positive EW = emission        Negative EW = absorption' 
-        print >> txt_file,  ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('#Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
+        print >> txt_file,   '# Percentage Error of Continuum Fit = %0.2f' % err_cont_fit
+        print >> txt_file,  ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('# Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
         for cw, w, e, i, fd, h, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, found_element, found_ion, found_ion_forbidden, found_ion_how_forbidden, width_list, net_fluxes_list, continuum_list, EWs_list):
             print >> txt_file,  ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
         txt_file.close()
@@ -778,6 +804,22 @@ def readlines_EWabsRelHbeta():
     Hline_and_EWs = [H_lines, H_EWratios]
     Heline_and_EWs = [He_lines, He_EWratios]
     return Hline_and_EWs, Heline_and_EWs
+
+def readreddCorr(obs_wav_arr):
+    '''This function reads specifically the file with Seaton's law 1979.'''
+    obs_wav_arr = numpy.array(obs_wav_arr)
+    # List of the data contained in the file assuming path /Users/home_directory/Documents/AptanaStudio3/science/science/spectrum/reddeningCorSeaton79.txt
+    text_file = os.path.abspath('../../science/science/spectrum/reddeningCorSeaton79.txt')
+    wavs, f_lambda = numpy.loadtxt(text_file, skiprows=2, usecols=(0,1), unpack=True)
+    f_lambda_obs = []
+    for w in obs_wav_arr:
+        if w in wavs:
+            f = f_lambda[wavs == w]
+            f = float(f)
+        else:
+            f = numpy.interp(w, wavs, f_lambda)
+        f_lambda_obs.append(f)
+    return f_lambda_obs
 
 
 #### EQUIVALENT WIDTH FUNCTIONS 
