@@ -674,9 +674,9 @@ def find_lines_info(object_spectra, continuum, err_cont_fit, linesinfo_file_name
         elif sline == "medium":
             s = 14.0
         elif sline == "yes":
-            s = 20.0
-        elif sline == "super":
             s = 30.0
+        elif sline == "super":
+            s = 45.0
         width.append(s)
     # Search in the object given for the lines in the lines_catalog
     lines_catalog = (wavs_air, wavs_vacuum, element, ion, forbidden, how_forbidden, transition, width)
