@@ -674,9 +674,9 @@ def find_lines_info(object_spectra, continuum, err_cont_fit, linesinfo_file_name
         elif sline == "medium":
             s = 14.0
         elif sline == "yes":
-            s = 30.0
+            s = 22.0
         elif sline == "super":
-            s = 45.0
+            s = 35.0
         width.append(s)
     # Search in the object given for the lines in the lines_catalog
     lines_catalog = (wavs_air, wavs_vacuum, element, ion, forbidden, how_forbidden, transition, width)
@@ -712,7 +712,7 @@ def find_lines_info(object_spectra, continuum, err_cont_fit, linesinfo_file_name
             upper_wav = central_wavelength + (line_width/2)
             width_list.append(line_width)
             F, C = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav)
-            ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)
+            ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav) # this is using my EW function
             continuum_list.append(float(C))
             net_fluxes_list.append(F)
             EWs_list.append(ew) 
@@ -755,11 +755,13 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav):
     Fsum = sum(net_flux)
     #print object_spectra[0][(object_spectra[0] >= lower_wav) & (object_spectra[0] <= upper_wav)], F
     net_continua = continuum[1][(continuum[0] >= lower_wav) & (continuum[0] <= upper_wav)]
-    C = sum(net_continua) / len(net_continua)
-    #C = numpy.median(net_continua) gives the same as the average value
+    #C = sum(net_continua) / float(len(net_continua))
+    C = numpy.median(net_continua)    # gives the same as the average value
     Csum = sum(net_continua)
     F = Fsum - Csum
-    print ' this is the new flux', F
+    ws = object_spectra[0][(object_spectra[0] >= lower_wav) & (object_spectra[0] <= upper_wav)]
+    wa = sum(ws) / float(len(ws))
+    print wa, '  F = %e    Fsum = %e    C = %e' % (F, Fsum, C)
     return F, C
 
 
