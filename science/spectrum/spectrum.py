@@ -752,11 +752,14 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav):
     # the net flux and corresponding continuum of the integration between lower and upper wavelengths
     '''
     net_flux = object_spectra[1][(object_spectra[0] >= lower_wav) & (object_spectra[0] <= upper_wav)]
-    F = sum(net_flux)
+    Fsum = sum(net_flux)
     #print object_spectra[0][(object_spectra[0] >= lower_wav) & (object_spectra[0] <= upper_wav)], F
     net_continua = continuum[1][(continuum[0] >= lower_wav) & (continuum[0] <= upper_wav)]
     C = sum(net_continua) / len(net_continua)
     #C = numpy.median(net_continua) gives the same as the average value
+    Csum = sum(net_continua)
+    F = Fsum - Csum
+    print ' this is the new flux', F
     return F, C
 
 
