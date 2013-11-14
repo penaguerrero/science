@@ -5,7 +5,7 @@
 #            forbidden
 #                 how forbidden
 #                       transition
-#                             strong line (nw[no and weak]=3A, no=5, weak[weak for strong lines]=7, medium=14, yes=20, super=30)
+#                             strong line (nw[no and weak]=3A, no=5, weak[weak for strong lines]=7, medium=14, yes=22, super=35)
 # ALL THE COMENTED LINES ARE COMENTED BECAUSE THE RESOLUTION IN THIS CASE IS NOT ENOUGH
 1157.19	C	1	no	NA	NA	nw
 1168.6	N	4	no	NA	NA	nw
