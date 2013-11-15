@@ -596,7 +596,7 @@ def n4airvac_conversion(wav):
     n = 1 + 6.4328e-5 + 2.94981e-2/(146*sigma_wav*sigma_wav) + 2.5540e-4/(41*sigma_wav*sigma_wav)
     return n
 
-def find_lines_info(object_spectra, continuum, err_cont_fit, linesinfo_file_name, text_table=False, vacuum=False):
+def find_lines_info(object_spectra, continuum, err_cont_fit, linesinfo_file_name, Halpha_width, text_table=False, vacuum=False):
     '''
     This function takes the object and continuum arrays to find the
     lines given in the lines_catalog.txt file.
@@ -677,6 +677,8 @@ def find_lines_info(object_spectra, continuum, err_cont_fit, linesinfo_file_name
             s = 22.0
         elif sline == "super":
             s = 35.0
+        elif sline == "Halpha":
+            s = Halpha_width
         width.append(s)
     # Search in the object given for the lines in the lines_catalog
     lines_catalog = (wavs_air, wavs_vacuum, element, ion, forbidden, how_forbidden, transition, width)
@@ -711,8 +713,7 @@ def find_lines_info(object_spectra, continuum, err_cont_fit, linesinfo_file_name
             lower_wav = central_wavelength - (line_width/2)
             upper_wav = central_wavelength + (line_width/2)
             width_list.append(line_width)
-            F, C = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav)
-            ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav) # this is using my EW function
+            F, C, ew = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav)
             continuum_list.append(float(C))
             net_fluxes_list.append(F)
             EWs_list.append(ew) 
@@ -751,19 +752,12 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav):
     FUNCTION RETURNS:
     # the net flux and corresponding continuum of the integration between lower and upper wavelengths
     '''
-    net_flux = object_spectra[1][(object_spectra[0] >= lower_wav) & (object_spectra[0] <= upper_wav)]
-    Fsum = sum(net_flux)
-    #print object_spectra[0][(object_spectra[0] >= lower_wav) & (object_spectra[0] <= upper_wav)], F
     net_continua = continuum[1][(continuum[0] >= lower_wav) & (continuum[0] <= upper_wav)]
-    #C = sum(net_continua) / float(len(net_continua))
-    C = numpy.median(net_continua)    # gives the same as the average value
-    Csum = sum(net_continua)
-    F = Fsum - Csum
-    ws = object_spectra[0][(object_spectra[0] >= lower_wav) & (object_spectra[0] <= upper_wav)]
-    wa = sum(ws) / float(len(ws))
-    print wa, '  F = %e    Fsum = %e    C = %e' % (F, Fsum, C)
-    return F, C
-
+    C = midpoint(net_continua[0], net_continua[-1])
+    ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)
+    F = ew * C #* (-1)   # with the actual equivalent wid definition
+    return F, C, ew
+    
 
 def theo_cont(wave_arr, scale_factor=1.0):
     '''
