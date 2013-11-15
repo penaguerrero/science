@@ -6,6 +6,7 @@
 #                 how forbidden
 #                       transition
 #                             strong line (nw[no and weak]=3A, no=5, weak[weak for strong lines]=7, medium=14, yes=22, super=35)
+#                                          Special width for Halpha = variable
 # ALL THE COMENTED LINES ARE COMENTED BECAUSE THE RESOLUTION IN THIS CASE IS NOT ENOUGH
 1157.19	C	1	no	NA	NA	nw
 1168.6	N	4	no	NA	NA	nw
@@ -440,7 +441,7 @@
 6548.03	N	2	yes	total	F1	no
 #6550.6	O	2	no	NA	0.0196	no
 #6556.06	O	2	no	NA	113	no
-6562.82	H	1	no	NA	H3	super
+6562.82	H	1	no	NA	H3	Halpha
 #6578.05	C	2	no	NA	2	no
 6583.41	N	2	yes	total	F1	no
 6591.06	0.0255	0.0144	no	NA	20	no
