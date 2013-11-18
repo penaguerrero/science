@@ -771,6 +771,7 @@ def theo_cont(wave_arr, scale_factor=1.0):
     theoretical_cont = numpy.array([wave_arr, cont_temp]) 
     return theoretical_cont
 
+
 #### READING SPECIFIC LINES
 def readlines_EWabsRelHbeta():
     '''This function specifically reads the lines of the file to correct for underlying absorption: abs_EWs_rel_Hbeta.txt'''
