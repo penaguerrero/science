@@ -666,15 +666,15 @@ def find_lines_info(object_spectra, continuum, err_cont_fit, linesinfo_file_name
     width = []
     for sline in strong_line:
         if sline == "nw":
-            s = 3.0
+            s = 4.0
         elif sline == "no":
-            s = 5.0
-        elif sline == "weak":
             s = 7.0
+        elif sline == "weak":
+            s = 10.0
         elif sline == "medium":
-            s = 14.0
+            s = 15.0
         elif sline == "yes":
-            s = 22.0
+            s = 25.0
         elif sline == "super":
             s = 35.0
         elif sline == "Halpha":
@@ -702,7 +702,7 @@ def find_lines_info(object_spectra, continuum, err_cont_fit, linesinfo_file_name
     print 'vacuum was set to %s, %s' % (vacuum, use_wavs_text)
     for i in range(len(lines_catalog[0])):
         # find the line in the catalog that is closest to a 
-        nearest2line = find_nearest_within(object_spectra[0], lines_catalog[use_wavs][i], 3)
+        nearest2line = find_nearest_within(object_spectra[0], lines_catalog[use_wavs][i], 10.)
         if nearest2line > 0.0:  
             catalog_wavs_found.append(lines_catalog[use_wavs][i])
             # If the line is in the object spectra, measure the intensity and equivalent width
@@ -755,7 +755,7 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav):
     net_continua = continuum[1][(continuum[0] >= lower_wav) & (continuum[0] <= upper_wav)]
     C = midpoint(net_continua[0], net_continua[-1])
     ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)
-    F = ew * C #* (-1)   # with the actual equivalent wid definition
+    F = ew * C #* (-1)   # with the actual equivalent width definition
     return F, C, ew
     
 
