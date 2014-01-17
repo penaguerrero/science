@@ -464,7 +464,8 @@
 7320.0000	O	2	yes	total	F2	medium
 #7329.67	O	2	yes	total	F2	medium
 #7330.73	O	2	yes	total	F2	medium
-7330.0000	O	2	yes	total	F2	medium
+7325.0000   O   2   yes total   F2  medium
+7330.0000   O   2   yes total   F2  medium
 7377.83	N	3	yes	total	F2	no
 7442.3	N	1	no	NA	3	no
 7452.54	Fe	2	yes	total	F14	no
