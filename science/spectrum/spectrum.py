@@ -596,7 +596,7 @@ def n4airvac_conversion(wav):
     n = 1 + 6.4328e-5 + 2.94981e-2/(146*sigma_wav*sigma_wav) + 2.5540e-4/(41*sigma_wav*sigma_wav)
     return n
 
-def find_lines_info(object_spectra, continuum, err_cont_fit, linesinfo_file_name, Halpha_width, text_table=False, vacuum=False):
+def find_lines_info(object_spectra, continuum, err_cont_fit, linesinfo_file_name, Halpha_width, text_table=False, vacuum=False, faintObj=False):
     '''
     This function takes the object and continuum arrays to find the
     lines given in the lines_catalog.txt file.
@@ -621,6 +621,8 @@ def find_lines_info(object_spectra, continuum, err_cont_fit, linesinfo_file_name
     # Read the line_catalog file, assuming that the path is the same:
     # '/Users/name_of_home_directory/Documents/AptanaStudio3/science/science/spectrum/lines_catalog.txt'
     line_catalog_path = os.path.abspath('../../science/science/spectrum/lines_catalog.txt')
+    if faintObj == True:
+        line_catalog_path = os.path.abspath('../../science/science/spectrum/lines_catalog_faintObjects.txt')        
     # Define the columns of the file
     wavelength = []
     element = []
