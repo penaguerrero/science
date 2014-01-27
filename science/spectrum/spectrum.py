@@ -670,11 +670,11 @@ def find_lines_info(object_spectra, continuum, err_cont_fit, linesinfo_file_name
         if sline == "nw":
             s = 4.0
         elif sline == "no":
-            s = 7.0
+            s = 8.0
         elif sline == "weak":
-            s = 10.0
+            s = 12.0
         elif sline == "medium":
-            s = 15.0
+            s = 18.0
         elif sline == "yes":
             s = 25.0
         elif sline == "super":
