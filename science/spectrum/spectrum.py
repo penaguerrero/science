@@ -668,13 +668,13 @@ def find_lines_info(object_spectra, continuum, err_cont_fit, linesinfo_file_name
     width = []
     for sline in strong_line:
         if sline == "nw":
-            s = 4.0
+            s = 3.5
         elif sline == "no":
-            s = 8.0
+            s = 7.5
         elif sline == "weak":
-            s = 12.0
+            s = 11.
         elif sline == "medium":
-            s = 18.0
+            s = 16.0
         elif sline == "yes":
             s = 25.0
         elif sline == "super":
@@ -756,7 +756,10 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav):
     '''
     net_continua = continuum[1][(continuum[0] >= lower_wav) & (continuum[0] <= upper_wav)]
     C = midpoint(net_continua[0], net_continua[-1])
-    ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)
+    # simple equivalent width routine
+    #ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)
+    # determine equivalent width by finding the max or the min of the line
+    ew, lower_wav, upper_wav = find_EW(object_spectra, continuum, lower_wav, upper_wav)
     F = ew * C #* (-1)   # with the actual equivalent width definition
     return F, C, ew
     
@@ -949,9 +952,11 @@ def EQW(data_arr, cont_arr, lower, upper):
     # Actually solving the eqw integral
     difference = 1 - (flux / flux_cont)
     eqw = sum(difference) * dlambda * (-1)   # the -1 is because of the definition of EQW        
+    #final_width = uplim - lolim
+    #print('center=', (uplim+lolim)/2.0,'  final_width = %f' % final_width, '    ew=', eqw)
     return (eqw, lolim, uplim)
 
-def EQW_iter(data_arr, cont_arr, line, guessed_width=2.0):
+def EQW_iter(data_arr, cont_arr, line, guessed_width=3.0):
     '''
     This function tries to determine automatically the width of the line, starting with an
     educated guess.
@@ -1010,81 +1015,82 @@ def EQW_iter(data_arr, cont_arr, line, guessed_width=2.0):
     #print('final_width = %f' % final_width)
     return (eqw, lolim, uplim)
 
-def EQW_initial_guess(data_arr, cont_arr, line, Teff, guessed_EQW=1):
+def find_EW(data_arr, cont_arr, lower, upper):
     '''
-    # line = line rest wavelength of the line of interest
-    # data_arr = data array that contains both wavelength and flux
-    # cont_arr = continuum array that also contains both wavelength and flux
-    # Teff = effective temperature of the star to plug into eqn 1 of Valls-Gabaud (1993).
-    #    * Teff is ONLY needed if expected_EQW is calculated
-    # guessed_EQW = initial guess of the EQW according to Valls-Gabaud (1993)
-    
-    #***** data_arr  and  cont_arr  HAVE to have the same dimensions
-    
-    # THE DEFINITION OF EQW USED IS POSITIVE FOR EMISSION AND NEGATIVE FOR ABSORPTION
+    This function recenters the line according to the max or min (emission or absorption) and then adjusts 
+    according to the min difference between the flux and the continuum.
+    lower = closest point in the wavelength array to lower part of the predefined width of the line
+    upper = closest point in the wavelength array to upper part of the predefined width of the line
     '''
-    if guessed_EQW == 1:
-        expected_eqw = -420.0 * numpy.exp(-1*float(Teff)/6100.0) 
-    else: 
-        expected_eqw = guessed_EQW    
-    print('expected_eqw = %f' % expected_eqw)
+    width = upper - lower
+    w, f = data_arr
+    wc, fc = cont_arr
+    # Determine if it is an absorption or emission line
+    mid_w = (upper + lower)/2.0
+    _, midd_pont_wav_idx = find_nearest(w, mid_w)
+    midd_pont_flux = f[midd_pont_wav_idx]
+    midd_pont_continuum = fc[midd_pont_wav_idx]
+    if midd_pont_continuum < 0.0:  # just in case the continuum went negative, make it positive!
+        midd_pont_continuum = midd_pont_continuum * (-1)
+    emission = True
+    if midd_pont_flux < midd_pont_continuum:
+        emission = False
+    # Recenter the line according to the max or min in flux
+    line_wave = w[(w>=lower) & (w<=upper)]
+    line_flux = f[(w>=lower) & (w<=upper)]
+    line_peak = max(line_flux)
+    if emission == False:
+        line_peak = min(line_flux)
+    new_center = float(line_wave[(line_flux==line_peak)])
+    lower = float(new_center - width/2.0)
+    upper = float(new_center + width/2.0)
+    # and make sure those numbers are actually in the array
+    _, lower_idx = find_nearest(w, lower)
+    _, upper_idx = find_nearest(w, upper)
+    lower = float(w[lower_idx])
+    upper = float(w[upper_idx])
+    # Determine wich one of the points is closer to the conituum line
+    flux_lower = findXinY(f, w, lower)
+    flux_upper = findXinY(f, w, upper)
+    cont_flux_lower = fc[(wc == lower)]
+    cont_flux_upper = fc[(wc == upper)]
+    left_height = numpy.fabs(numpy.fabs(flux_lower) - numpy.fabs(cont_flux_lower))
+    right_height = numpy.fabs(numpy.fabs(flux_upper) - numpy.fabs(cont_flux_upper))
+    min_center = lower
+    left = True
+    if left_height < right_height:
+        min_center = lower
+    elif left_height > right_height:
+        min_center = upper
+        left = False
+    elif left_height == right_height:
+        print 'Line is ceneted'
+    # Create an array with 1 Angstrom increments for 8 Angtroms (4 to the left and 4 to the right) and find the min_height again
+    # Optimize the min_height, that is move it towards the closest point where the line and the continuum meet
+    lo, _ = find_nearest(w, min_center-4.0)
+    up, _ = find_nearest(w, min_center+4.0)
+    temp_array_w = w[(w>=lo) & (w<=up)]
+    temp_array_f = f[(w>=lo) & (w<=up)]
+    temp_array_contf = fc[(wc>=lo) & (wc<=up)]
+    temp_mins = []
+    for temf_f, temf_c in zip(temp_array_f, temp_array_contf):
+        tm = numpy.fabs(numpy.fabs(temf_f) - numpy.fabs(temf_c))
+        temp_mins.append(tm)
+    min_height = min(temp_mins)
+    min_height_idx = temp_mins.index(min_height)
+    # Based on the new min_height, recenter the line
+    if left == True:
+        lolim = temp_array_w[min_height_idx]
+        uplim = float(lolim + width)
+    else:
+        uplim = temp_array_w[min_height_idx]
+        lolim = float(uplim - width)
+    # now determine the equivalent width
+    eqw, lolim, uplim = EQW(data_arr, cont_arr, lolim, uplim)
+    #final_width = uplim - lolim
+    #print('center=', (uplim+lolim)/2.0,'  final_width = %f' % final_width, '    ew=', eqw)
+    return (eqw, lolim, uplim)
     
-    lolim = line - numpy.fabs(expected_eqw/2.0)
-    uplim = line + numpy.fabs(expected_eqw/2.0)
-    print('lolim, uplim', lolim, uplim)
-    guessed_width = uplim - lolim
-    test_eqw, test_lolim, test_uplim = EQW_iter(data_arr, cont_arr, line, guessed_width)
-    return(test_eqw, test_lolim, test_uplim)
-    
-    
-def EQW_initial_guessVG(data_arr, cont_arr, line, Teff, guessed_EQW=1):
-    '''
-    # line = line rest wavelength of the line of interest
-    # data_arr = data array that contains both wavelength and flux
-    # cont_arr = continuum array that also contains both wavelength and flux
-    # Teff = effective temperature of the star to plug into eqn 1 of Valls-Gabaud (1993).
-    #    * Teff is ONLY needed if expected_EQW is calculated
-    # guessed_EQW = initial guess of the EQW according to Valls-Gabaud (1993)
-    
-    #***** data_arr  and  cont_arr  HAVE to have the same dimensions
-    
-    # THE DEFINITION OF EQW USED IS POSITIVE FOR EMISSION AND NEGATIVE FOR ABSORPTION
-    '''
-    if guessed_EQW == 1:
-        VG_eqw_object = -420.0 * numpy.exp(-1*float(Teff)/6100.0) 
-    else: 
-        VG_eqw_object = guessed_EQW    
-    print('Valls-Gabaud eqw = %f' % VG_eqw_object)
-    
-    test_eqw, test_lolim, test_uplim = EQW_iter(data_arr, cont_arr, line, guessed_width=2.0)
-    interval_length = numpy.fabs(VG_eqw_object) / 2.0
-    upper_allowed_eqw = numpy.fabs(VG_eqw_object)+(interval_length/2.0)
-    lower_allowed_eqw = numpy.fabs(VG_eqw_object)-(interval_length/2.0)
-    #print('lower_allowed_eqw, upper_allowed_eqw', lower_allowed_eqw, upper_allowed_eqw)
-    iteration = 0
-    increase_width = 2.0
-    conditions_met = 0
-    if (numpy.fabs(test_eqw) <= upper_allowed_eqw) and (numpy.fabs(test_eqw) >= lower_allowed_eqw):
-        conditions_met = 1       
-    
-    while conditions_met != 1:        
-        #print('*** in the loop: expected_eqw=%f, test_eqw=%f, numpy.fabs(test_eqw)=%f' % (VG_eqw_object, test_eqw, numpy.fabs(test_eqw)))
-        #print('iteration number = %i' % iteration)
-        new_lolim = test_lolim - increase_width/2.0
-        new_uplim = test_uplim + increase_width/2.0
-        #print('new_lolim, new_uplim', new_lolim, new_uplim)
-        new_guessed_width = new_uplim - new_lolim
-        #test_eqw, test_lolim, test_uplim = EQW(data_arr, cont_arr, new_lolim, new_uplim)
-        test_eqw, test_lolim, test_uplim = EQW_iter(data_arr, cont_arr, line, new_guessed_width)
-        if (numpy.fabs(test_eqw) <= upper_allowed_eqw) and (numpy.fabs(test_eqw) >= lower_allowed_eqw):
-            conditions_met = 1
-        else:
-            iteration = iteration + 1
-    print('iteration number = %i' % iteration)
-    final_width = test_uplim - test_lolim
-    print('Final array-with of expected_eqw = %f' % (final_width))
-    return(VG_eqw_object, test_eqw, test_lolim, test_uplim)
-
 #### Full width half maximum 
 def FWHM(sig):
     # This can only be runned after the gaus_fit function
