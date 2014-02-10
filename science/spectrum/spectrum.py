@@ -1294,6 +1294,81 @@ def rebin_one_arr_to_desired_resolution(desired_delta_lambda, line, arr, guessed
     smoothing_R_factor = float(R_initial) / float(R)
     return (rebinned_arr, smoothing_R_factor)
 
+def find_dispersion(wavs):
+    original_rows = float(len(wavs))
+    i = 0
+    disp_list = []
+    for j in range(1, len(wavs)):
+        disp = wavs[j] - wavs[i]
+        disp_list.append(disp)
+        i = i + 1
+    original_disp = sum(disp_list) / original_rows
+    return original_disp
+
+def rebin_spec2disp(desired_dispersion, arr):
+    ''' 
+    This function uses the desired dispersion and the initial wavelength to rebin the spectra.
+        Array must be numpy arrays: wavelengths and fluxes.
+    RETURNS:  - rebinned array
+    '''
+    wavs, flxs = arr
+    original_disp = find_dispersion(wavs)
+    print 'Original dispersion is:  %f' % original_disp
+    '''
+    resPow_avg = []
+    for line in wavs:
+        resPow = resolving_power(line, arr)
+        resPow_avg.append(resPow)
+    avgR = int(sum(resPow_avg)) / len(wavs)
+    print 'avgR', avgR
+    '''
+    if original_disp == desired_dispersion:
+        print 'The desired dispersion is the spectrum dispersion.' 
+        return arr
+    elif original_disp != desired_dispersion:
+        print 'Calculating new dispersion...'
+        rebinned_wavs = []
+        rebinned_flxs = []
+        rebinned_wavs.append(wavs[0])
+        rebinned_flxs.append(flxs[0])
+        reb_w = wavs[0] + desired_dispersion
+        reb_f = numpy.interp(reb_w, wavs, flxs)
+        rebinned_wavs.append(reb_w)
+        rebinned_flxs.append(reb_f)
+        end_while = False
+        end_wave = rebinned_wavs[-1]
+        #print 'w, f', reb_w, reb_f, '      end_wave', end_wave
+        while end_while == False:
+            reb_w = reb_w + desired_dispersion
+            reb_f = numpy.interp(reb_w, wavs, flxs)
+            rebinned_wavs.append(reb_w)
+            rebinned_flxs.append(reb_f)            
+            end_wave = rebinned_wavs[-1]
+            #print 'w, f', reb_w, reb_f, '      end_wave', end_wave
+            if (end_wave > wavs[-1]-5.0) and (end_wave < wavs[-1]+5.0):
+                end_while = True
+    rebinned_disp = find_dispersion(rebinned_wavs)
+    print 'rebinned_disp = %0.2f' % rebinned_disp
+    return numpy.array([rebinned_wavs, rebinned_flxs])
+    '''
+    ### Text file of Resolving Power of every wavelength
+    resol = open(path_results+'CMFGENResolvingPower.txt', 'w+')
+    resPow_avg = []
+    for line in A:
+        resPow = spectrum.resolving_power(line, data_lines)
+        resPow_avg.append(resPow)
+        print >> resol, line, resPow 
+        print('wavelength and R', line, resPow)
+    avgR = int(sum(resPow_avg)) / len(A)
+    print >> resol, 'Average Reolving Power of CMFGEN lines file = '
+    print >> resol, avgR
+    resol.close()
+    print('Average Reolving Power of CMFGEN lines file = %i' % (avgR))
+    if line == None:
+        for line in arr[0]:
+            rebinned_arr, _ = rebin_one_arr_to_desired_resolution(desired_delta_lambda, line, arr, guessed_rows)
+    '''
+
 def do_rebin(spectrum_arr, continuum_arr, desired_rows=500):
     '''### THIS FUNCTION IS TO BE RUNNED WHEN CONTINUUM AND SPECTRA ARRAY HAVE SAME DIMENSIONS'''
     orig_factors = (1, 1) # Numbers that will mumtiply colums and rows
