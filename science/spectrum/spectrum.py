@@ -1,10 +1,11 @@
 import numpy
-import math
+#import math
 import os
 import logging
 import collections
 import string
 from scipy import ndimage
+from scipy import optimize
 from pprint import pprint
 from scipy import stats
 from matplotlib import pyplot
@@ -297,6 +298,14 @@ def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, o
     else:
         return corr_wf, fitted_continuum, err_fit
 
+def write_wavflxcont_file(wavelengths, fluxes, continuum, file_name):
+    ''' This function is used when wanting to write a file containing only 3 columns: wavelengths, fluxes, and fitted coninuum. '''
+    txt = open(file_name, '+w')
+    print >> txt, '{:<14} {:<30} {:<30}'.format('Wavelength [A]', 'Flux [ergs/s/cm$^2$/$\AA$]', 'Continuum [ergs/s/cm$^2$/$\AA$]')
+    for w, f, c in zip(wavelengths, fluxes, continuum):
+        print >> txt, '{:<4.10f} {:<20.10e} {:<20.10e}'.format(w, f, c)
+    txt.close()
+
 def get_best_polyfit(continuum_arr, window):
     order_list = [1, 2, 3, 4, 5, 6, 7, 8, 9]
     pol_fit_list = []
@@ -528,10 +537,15 @@ def get_err_cont_fit(text_file):
 
 ############################################################################################
 # LINE INFORMATION
-def get_obj_files2use(object_name, add_str, specs):
-    nuv = object_name+add_str+"_nuv.txt"
-    opt = object_name+add_str+"_opt.txt"
-    nir = object_name+add_str+"_nir.txt"
+def get_obj_files2use(object_name, specs, add_str=None):
+    if add_str != None:
+        nuv = object_name+add_str+"_nuv.txt"
+        opt = object_name+add_str+"_opt.txt"
+        nir = object_name+add_str+"_nir.txt"
+    else:
+        nuv = object_name+"_nuv.txt"
+        opt = object_name+"_opt.txt"
+        nir = object_name+"_nir.txt"        
     full_file_list = [nuv, opt, nir]
     # Determine what files to use
     text_file_list = []
@@ -596,7 +610,7 @@ def n4airvac_conversion(wav):
     n = 1 + 6.4328e-5 + 2.94981e-2/(146*sigma_wav*sigma_wav) + 2.5540e-4/(41*sigma_wav*sigma_wav)
     return n
 
-def find_lines_info(object_spectra, continuum, err_cont_fit, linesinfo_file_name, Halpha_width, text_table=False, vacuum=False, faintObj=False):
+def find_lines_info(object_spectra, continuum, linesinfo_file_name, Halpha_width, text_table=False, vacuum=False, faintObj=False, err_cont_fit=None):
     '''
     This function takes the object and continuum arrays to find the
     lines given in the lines_catalog.txt file.
@@ -729,7 +743,8 @@ def find_lines_info(object_spectra, continuum, err_cont_fit, linesinfo_file_name
         txt_file = open(linesinfo_file_name, 'w+')
         print >> txt_file,  use_wavs_text
         print >> txt_file,   '# Positive EW = emission        Negative EW = absorption' 
-        print >> txt_file,   '# Percentage Error of Continuum Fit = %0.2f' % err_cont_fit
+        if err_cont_fit != None:
+            print >> txt_file,   '# Percentage Error of Continuum Fit = %0.2f' % err_cont_fit
         print >> txt_file,  ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('# Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
         for cw, w, e, i, fd, h, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, found_element, found_ion, found_ion_forbidden, found_ion_how_forbidden, width_list, net_fluxes_list, continuum_list, EWs_list):
             print >> txt_file,  ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
@@ -1094,7 +1109,8 @@ def find_EW(data_arr, cont_arr, lower, upper):
 #### Full width half maximum 
 def FWHM(sig):
     # This can only be runned after the gaus_fit function
-    fwhm = 2 * (2 * math.log1p(2))**0.5 * sig
+    #fwhm = 2 * (2 * math.log1p(2))**0.5 * sig
+    fwhm = 2 * numpy.sqrt(2 * numpy.log(2)) * sig
     print ('FWHM = ', fwhm)
     return fwhm
 
