@@ -555,7 +555,7 @@ def get_obj_files2use(object_name, specs, add_str=None):
     return text_file_list, full_file_list
 
 def loadtxt_from_files(object_name, add_str, specs, text_files_path):
-    text_file_list, full_file_list = get_obj_files2use(object_name, add_str, specs)
+    text_file_list, full_file_list = get_obj_files2use(object_name, specs, add_str)
     # List of the data contained in each file
     data = []
     for i in range(len(text_file_list)):
@@ -1037,6 +1037,8 @@ def find_EW(data_arr, cont_arr, lower, upper):
     lower = closest point in the wavelength array to lower part of the predefined width of the line
     upper = closest point in the wavelength array to upper part of the predefined width of the line
     '''
+    lower = float(lower)
+    upper = float(upper)
     width = upper - lower
     w, f = data_arr
     wc, fc = cont_arr
@@ -1065,8 +1067,8 @@ def find_EW(data_arr, cont_arr, lower, upper):
     lower = float(w[lower_idx])
     upper = float(w[upper_idx])
     # Determine wich one of the points is closer to the conituum line
-    flux_lower = findXinY(f, w, lower)
-    flux_upper = findXinY(f, w, upper)
+    flux_lower = f[lower_idx]
+    flux_upper = f[upper_idx]
     cont_flux_lower = fc[(wc == lower)]
     cont_flux_upper = fc[(wc == upper)]
     left_height = numpy.fabs(numpy.fabs(flux_lower) - numpy.fabs(cont_flux_lower))
@@ -1079,7 +1081,8 @@ def find_EW(data_arr, cont_arr, lower, upper):
         min_center = upper
         left = False
     elif left_height == right_height:
-        print 'Line is ceneted'
+        #print 'Line is ceneted'
+        pass
     # Create an array with 1 Angstrom increments for 8 Angtroms (4 to the left and 4 to the right) and find the min_height again
     # Optimize the min_height, that is move it towards the closest point where the line and the continuum meet
     lo, _ = find_nearest(w, min_center-4.0)
