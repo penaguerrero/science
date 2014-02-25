@@ -692,7 +692,7 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, Halpha_width
         elif sline == "yes":
             s = 25.0
         elif sline == "super":
-            s = 35.0
+            s = 33.0
         elif sline == "Halpha":
             s = Halpha_width
         width.append(s)
@@ -1387,6 +1387,12 @@ def rebin_spec2disp(desired_dispersion, arr):
         for line in arr[0]:
             rebinned_arr, _ = rebin_one_arr_to_desired_resolution(desired_delta_lambda, line, arr, guessed_rows)
     '''
+
+def rebin2AperPix(original, desired, wavsflx_arr):
+    new = original/desired
+    rebin_factor = (1, new)
+    rebinned_arr = rebin(wavsflx_arr, rebin_factor)
+    return rebinned_arr
 
 def do_rebin(spectrum_arr, continuum_arr, desired_rows=500):
     '''### THIS FUNCTION IS TO BE RUNNED WHEN CONTINUUM AND SPECTRA ARRAY HAVE SAME DIMENSIONS'''
