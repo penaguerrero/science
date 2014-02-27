@@ -428,7 +428,7 @@ def find_chi2(observed_arr, expected_arr):
 
 ############################################################################################
 # GATHER TEXT FILES OF SPECTRA INTO A SINGLE FILE
-def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create_txt=True):
+def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create_txt=True, err_cont_fit=None):
     '''
     this function gathers all the text files into a single thext file.
     # specs_list = list of the text files to be gathered
@@ -453,8 +453,9 @@ def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create
     for spec in text_file_list:
         # read the file
         cols_in_file = readlines_from_lineinfo(spec)
-        err_cont_fit = get_err_cont_fit(spec)
-        all_err_fit.append(err_cont_fit)
+        if err_cont_fit != None:
+            err_cont_fit = get_err_cont_fit(spec)
+            all_err_fit.append(err_cont_fit)
         # Each spec contains the following:
         # 0=catalog_wavelength, 1=observed_wavelength, 2=element, 3=ion, 4=forbidden, 5=how_forbidden, 6=width, 7=flux, 8=continuum, 9=EW
         # These are lists, make the observed wavelengths a numpy array to choose the accepted range of data
@@ -515,7 +516,10 @@ def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create
         txt_file = open(name_out_file, 'w+')
         print >> txt_file,  '# Redshift-corrected lines'
         print >> txt_file,   '# Positive EW = emission        Negative EW = absorption' 
-        print >> txt_file,   '# Percentage Errors of Continuum Fits: NUV, Opt, NIR = %0.2f, %0.2f, %0.2f' % (all_err_fit[0], all_err_fit[1], all_err_fit[2])
+        if err_cont_fit != None:        
+            print >> txt_file,   '# Percentage Errors of Continuum Fits: NUV, Opt, NIR = %0.2f, %0.2f, %0.2f' % (all_err_fit[0], all_err_fit[1], all_err_fit[2])
+        else:
+            print >> txt_file,   '#'
         print >> txt_file,   '#    NUV: wav <= 2000,   Opt: 2000 > wav < 5000,   NIR: wav >= 5000'
         print >> txt_file,  ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('# Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
         for cw, w, e, i, fd, h, s, F, C, ew in zip(accepted_cols_in_file[0], accepted_cols_in_file[1], accepted_cols_in_file[2], accepted_cols_in_file[3], accepted_cols_in_file[4], 
@@ -523,7 +527,10 @@ def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create
             print >> txt_file,  ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
         txt_file.close()
         print 'File   %s   writen!' % name_out_file
-    return accepted_cols_in_file, all_err_fit
+    if err_cont_fit != None:
+        return accepted_cols_in_file, all_err_fit
+    else:
+        return accepted_cols_in_file
     
 def get_err_cont_fit(text_file):
     f = open(text_file, 'r')
@@ -545,7 +552,7 @@ def get_obj_files2use(object_name, specs, add_str=None):
     else:
         nuv = object_name+"_nuv.txt"
         opt = object_name+"_opt.txt"
-        nir = object_name+"_nir.txt"        
+        nir = object_name+"_nir.txt"
     full_file_list = [nuv, opt, nir]
     # Determine what files to use
     text_file_list = []
@@ -745,6 +752,8 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, Halpha_width
         print >> txt_file,   '# Positive EW = emission        Negative EW = absorption' 
         if err_cont_fit != None:
             print >> txt_file,   '# Percentage Error of Continuum Fit = %0.2f' % err_cont_fit
+        else:
+            print >> txt_file,   '#'
         print >> txt_file,  ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('# Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
         for cw, w, e, i, fd, h, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, found_element, found_ion, found_ion_forbidden, found_ion_how_forbidden, width_list, net_fluxes_list, continuum_list, EWs_list):
             print >> txt_file,  ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
@@ -752,7 +761,7 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, Halpha_width
         print 'File   %s   writen!' % linesinfo_file_name
     elif text_table == False:
         print '# Positive EW = emission        Negative EW = absorption' 
-        print ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
+        print ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('# Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
         for cw, w, e, i, fd, h, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, found_element, found_ion, found_ion_forbidden, found_ion_how_forbidden, width_list, net_fluxes_list, continuum_list, EWs_list):
             print ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
     return catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list
