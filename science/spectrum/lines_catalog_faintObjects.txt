@@ -379,7 +379,7 @@
 4814.53	Fe	2	yes	total	F20	no
 #4850.7	Fe	2	yes	total	F20	no
 #4855.53	0.0259	0.026	no	NA	15	no
-4861.33	H	1	no	NA	H4	weak
+4861.33	H	1	no	NA	H4	medium
 #4870.53	0.0061	0.0061	no	NA	30	no
 #4879.17	0.0124	0.0123	no	NA	20	no
 4881.11	Fe	3	yes	total	F2	no
