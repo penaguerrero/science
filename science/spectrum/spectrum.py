@@ -781,9 +781,9 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav):
     net_continua = continuum[1][(continuum[0] >= lower_wav) & (continuum[0] <= upper_wav)]
     C = midpoint(net_continua[0], net_continua[-1])
     # simple equivalent width routine
-    #ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)
+    ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)
     # determine equivalent width by finding the max or the min of the line
-    ew, lower_wav, upper_wav = find_EW(object_spectra, continuum, lower_wav, upper_wav)
+    #ew, lower_wav, upper_wav = find_EW(object_spectra, continuum, lower_wav, upper_wav)
     F = ew * C #* (-1)   # with the actual equivalent width definition
     return F, C, ew
     
@@ -1090,7 +1090,7 @@ def find_EW(data_arr, cont_arr, lower, upper):
         min_center = upper
         left = False
     elif left_height == right_height:
-        #print 'Line is ceneted'
+        #print 'Line is centered'
         pass
     # Create an array with 1 Angstrom increments for 8 Angtroms (4 to the left and 4 to the right) and find the min_height again
     # Optimize the min_height, that is move it towards the closest point where the line and the continuum meet
@@ -1114,8 +1114,8 @@ def find_EW(data_arr, cont_arr, lower, upper):
         lolim = float(uplim - width)
     # now determine the equivalent width
     eqw, lolim, uplim = EQW(data_arr, cont_arr, lolim, uplim)
-    #final_width = uplim - lolim
-    #print('center=', (uplim+lolim)/2.0,'  final_width = %f' % final_width, '    ew=', eqw)
+    final_width = uplim - lolim
+    print('center=', (uplim+lolim)/2.0,'  final_width = %f' % final_width, '    ew=', eqw)
     return (eqw, lolim, uplim)
     
 #### Full width half maximum 
@@ -1398,7 +1398,8 @@ def rebin_spec2disp(desired_dispersion, arr):
     '''
 
 def rebin2AperPix(original, desired, wavsflx_arr):
-    new = original/desired
+    new =  original / desired
+    print 'rebinning factor', new
     rebin_factor = (1, new)
     rebinned_arr = rebin(wavsflx_arr, rebin_factor)
     return rebinned_arr
