@@ -9,6 +9,8 @@ from scipy import optimize
 from pprint import pprint
 from scipy import stats
 from matplotlib import pyplot
+#from uncertainties import unumpy
+#from uncertainties import ufloat
 #from numba import autojit
 
 #@autojit
@@ -409,7 +411,6 @@ def find_reduced_chi2_of_polynomial(polynomialfit_arr, continuum_arr, window):
         chi2_list.append(reduced_chi_sq)
     avg_chi2 = sum(chi2_list) / float(len(chi2_list))
     return avg_chi2, chi2_list, window_cont_list, err_fit
-    
 
 def find_chi2(observed_arr, expected_arr):
     mean = sum(observed_arr) / float(len(observed_arr))
@@ -428,9 +429,9 @@ def find_chi2(observed_arr, expected_arr):
 
 ############################################################################################
 # GATHER TEXT FILES OF SPECTRA INTO A SINGLE FILE
-def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create_txt=True, err_cont_fit=None):
+def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create_txt=True, err_cont_fit=None, do_errors=False):
     '''
-    this function gathers all the text files into a single thext file.
+    this function gathers all the text files into a single text file.
     # specs_list = list of the text files to be gathered
     # name_out_file = name of the output file with the gathered wavelengths and fluxes
     # reject = limit of the angstroms to be rejected from the edges of the detector (default is set to 0.0=No rejections)
@@ -617,7 +618,7 @@ def n4airvac_conversion(wav):
     n = 1 + 6.4328e-5 + 2.94981e-2/(146*sigma_wav*sigma_wav) + 2.5540e-4/(41*sigma_wav*sigma_wav)
     return n
 
-def find_lines_info(object_spectra, continuum, linesinfo_file_name, Halpha_width, text_table=False, vacuum=False, faintObj=False, err_cont_fit=None):
+def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, vacuum=False, faintObj=False, linesinfo_file_name=None, err_continuum=None):
     '''
     This function takes the object and continuum arrays to find the
     lines given in the lines_catalog.txt file.
@@ -737,7 +738,7 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, Halpha_width
             upper_wav = central_wavelength + (line_width/2)
             width_list.append(line_width)
             F, C, ew = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav)
-            continuum_list.append(float(C))
+            continuum_list.append(C)
             net_fluxes_list.append(F)
             EWs_list.append(ew) 
             found_element.append(lines_catalog[2][i])
@@ -745,27 +746,73 @@ def find_lines_info(object_spectra, continuum, linesinfo_file_name, Halpha_width
             found_ion_forbidden.append(lines_catalog[4][i])
             found_ion_how_forbidden.append(lines_catalog[5][i])
     # Create the table of Net Fluxes and EQWs
-    if text_table == True:
-        #linesinfo_file_name = raw_input('Please type name of the .txt file containing the line info. Use the full path.')
-        txt_file = open(linesinfo_file_name, 'w+')
-        print >> txt_file,  use_wavs_text
-        print >> txt_file,   '# Positive EW = emission        Negative EW = absorption' 
-        if err_cont_fit != None:
-            print >> txt_file,   '# Percentage Error of Continuum Fit = %0.2f' % err_cont_fit
-        else:
-            print >> txt_file,   '#'
-        print >> txt_file,  ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('# Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
-        for cw, w, e, i, fd, h, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, found_element, found_ion, found_ion_forbidden, found_ion_how_forbidden, width_list, net_fluxes_list, continuum_list, EWs_list):
-            print >> txt_file,  ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
-        txt_file.close()
-        print 'File   %s   writen!' % linesinfo_file_name
-    elif text_table == False:
-        print '# Positive EW = emission        Negative EW = absorption' 
-        print ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('# Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
-        for cw, w, e, i, fd, h, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, found_element, found_ion, found_ion_forbidden, found_ion_how_forbidden, width_list, net_fluxes_list, continuum_list, EWs_list):
-            print ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
-    return catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list
+    if linesinfo_file_name != None:
+        if text_table == True:
+            #linesinfo_file_name = raw_input('Please type name of the .txt file containing the line info. Use the full path.')
+            txt_file = open(linesinfo_file_name, 'w+')
+            print >> txt_file,  use_wavs_text
+            print >> txt_file,   '# Positive EW = emission        Negative EW = absorption' 
+            if err_continuum != None:
+                print >> txt_file,   '# Percentage Error of Continuum Fit = %0.2f' % err_continuum
+            else:
+                print >> txt_file,   '#'
+            print >> txt_file,  ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('# Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
+            for cw, w, e, i, fd, h, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, found_element, found_ion, found_ion_forbidden, found_ion_how_forbidden, width_list, net_fluxes_list, continuum_list, EWs_list):
+                print >> txt_file,  ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
+            txt_file.close()
+            print 'File   %s   writen!' % linesinfo_file_name
+        elif text_table == False:
+            print '# Positive EW = emission        Negative EW = absorption' 
+            print ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('# Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
+            for cw, w, e, i, fd, h, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, found_element, found_ion, found_ion_forbidden, found_ion_how_forbidden, width_list, net_fluxes_list, continuum_list, EWs_list):
+                print ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
+        return catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list
+    else:
+        return catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list
 
+def get_lineinfo_uncertainties(object_spectra, continuum, Halpha_width, faintObj, err_instrument, err_continuum):
+    # Determine the absolute error and get the arrays of plus and minus fluxes
+    err_fluxes_plus = []
+    err_fluxes_minus = []
+    err_contfl_plus = []
+    err_contfl_minus = []
+    wavelengths = []
+    for w, f, c in zip(object_spectra[0], object_spectra[1], continuum[1]):
+        wavelengths.append(w)
+        ferr = f * err_instrument
+        fplus = f + ferr
+        fminus = f - ferr
+        err_fluxes_plus.append(fplus)
+        err_fluxes_minus.append(fminus)
+        cerr = c * err_continuum
+        cplus = c + cerr
+        cminus = c - cerr
+        err_contfl_plus.append(cplus)
+        err_contfl_minus.append(cminus)
+    object_spectra_plus = numpy.array([wavelengths, err_fluxes_plus]) 
+    object_spectra_minus = numpy.array([wavelengths, err_fluxes_minus]) 
+    continuum_plus = numpy.array([wavelengths, err_contfl_plus])
+    continuum_minus = numpy.array([wavelengths, err_contfl_minus])
+    # Now run the plus and minus fluses through the lineinfo function
+    object_lines_info_plus = find_lines_info(object_spectra_plus, continuum_plus, Halpha_width=Halpha_width, text_table=False,  
+                                             vacuum=False, faintObj=faintObj, linesinfo_file_name=None, err_continuum=None)
+    object_lines_info_minus = find_lines_info(object_spectra_minus, continuum_minus, Halpha_width=Halpha_width, text_table=False,  
+                                              vacuum=False, faintObj=faintObj, linesinfo_file_name=None, err_continuum=None)
+    # get the final error by assuming that it is symetric: (x_plus - x_minus)/2
+    # line_info contains: catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list
+    _, _, _, net_fluxes_list_plus, continuum_list_plus, EWs_list_plus = object_lines_info_plus
+    _, _, _, net_fluxes_list_minus, continuum_list_minus, EWs_list_minus = object_lines_info_minus
+    err_fluxes = []
+    err_continuum = []
+    err_ews = []
+    for nfp, clp, ewp, nfm, clm, ewm in zip(net_fluxes_list_plus, continuum_list_plus, EWs_list_plus, net_fluxes_list_minus, continuum_list_minus, EWs_list_minus):
+        e_flx = (numpy.abs(nfp) - numpy.abs(nfm)) / 2.0
+        e_cont = (numpy.abs(clp) - numpy.abs(clm)) / 2.0
+        e_ew = (numpy.abs(ewp) - numpy.abs(ewm)) / 2.0
+        err_fluxes.append(numpy.abs(e_flx))
+        err_continuum.append(numpy.abs(e_cont))
+        err_ews.append(numpy.abs(e_ew))
+    return err_fluxes, err_continuum, err_ews
 
 def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav):
     '''
@@ -786,7 +833,6 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav):
     #ew, lower_wav, upper_wav = find_EW(object_spectra, continuum, lower_wav, upper_wav)
     F = ew * C #* (-1)   # with the actual equivalent width definition
     return F, C, ew
-    
 
 def theo_cont(wave_arr, scale_factor=1.0):
     '''
@@ -1630,9 +1676,9 @@ def find_nearest_within(arr, value, threshold):
     choped_arr = arr[(arr >= value-half_thres) & (arr <= value+half_thres)]
     if len(choped_arr) == 0:
         return 0.0
-    diff = numpy.fabs(choped_arr - value)
+    diff = numpy.abs(choped_arr - value)
     diff_min = min(diff)
-    return float(choped_arr[diff==diff_min])
+    return numpy.squeeze(choped_arr[diff==diff_min])
 
 def closest(thelist, value) :
     '''
