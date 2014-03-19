@@ -429,7 +429,7 @@ def find_chi2(observed_arr, expected_arr):
 
 ############################################################################################
 # GATHER TEXT FILES OF SPECTRA INTO A SINGLE FILE
-def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create_txt=True, err_cont_fit=None, do_errors=False):
+def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create_txt=True, err_cont_fit=None, errs_files=None):
     '''
     this function gathers all the text files into a single text file.
     # specs_list = list of the text files to be gathered
@@ -437,6 +437,7 @@ def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create
     # reject = limit of the angstroms to be rejected from the edges of the detector (default is set to 0.0=No rejections)
     # start_w = will force the function to start the accepted array from this wavelength
     # create_txt = if set to False the output will be just the full data into a list of lists
+    # errs_files is the list of error text files
     RETURNS:
     # the text file with the gathered data
     '''
@@ -451,12 +452,23 @@ def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create
     accepted_continuum = []
     accepted_EW = []
     all_err_fit = []
+    flux_errs = []
+    ew_errs = []
     for spec in text_file_list:
         # read the file
         cols_in_file = readlines_from_lineinfo(spec)
         if err_cont_fit != None:
             err_cont_fit = get_err_cont_fit(spec)
             all_err_fit.append(err_cont_fit)
+        if errs_files != None:
+            # We are only interested in columns of: flux error, continuum error, and EW error
+            if 'nuv' in spec:
+                efile = errs_files[0]
+            elif 'opt' in spec:
+                efile = errs_files[1]
+            elif 'nir' in spec:
+                efile = errs_files[2]
+            eff, efe = numpy.loadtxt(efile, skiprows=1, usecols=(2,8), unpack=True)
         # Each spec contains the following:
         # 0=catalog_wavelength, 1=observed_wavelength, 2=element, 3=ion, 4=forbidden, 5=how_forbidden, 6=width, 7=flux, 8=continuum, 9=EW
         # These are lists, make the observed wavelengths a numpy array to choose the accepted range of data
@@ -497,21 +509,27 @@ def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create
             accepted_flux.append(cols_in_file[7][idx])
             accepted_continuum.append(cols_in_file[8][idx])
             accepted_EW.append(cols_in_file[9][idx])
+            if errs_files != None:
+                flux_errs.append(eff[idx])
+                ew_errs.append(efe[idx])
     accepted_cols_in_file = [accepted_catalog_wavelength, accepted_observed_wavelength, accepted_element, accepted_ion, accepted_forbidden, 
                              accepted_how_forbidden, accepted_width, accepted_flux, accepted_continuum, accepted_EW]
+    if errs_files != None:
+        accepted_errs = [flux_errs, ew_errs]
     # Choose the right intensities if lines are repeated
     # There are no repetitions between the NUV and Opt but there could be a few from the Opt to the NIR. 
     # Because the sensibility of the detector is better with the g750l than with the g430l, we want to keep NIR the lines.
     repeated_lines = collections.Counter(accepted_catalog_wavelength)
-    #print repeated_lines
     rl_list = [i for i in repeated_lines if repeated_lines[i]>1]
-    #print 'list', rl_list
     for rl in rl_list:
         idx_of_line_to_be_removed = find_index_in_list(accepted_catalog_wavelength, rl)
         if (rl > 5000.0) and (rl < 5600.0):
             for each_list in accepted_cols_in_file:
                 # Since the line of the g430l filter will be the first occurence, remove that
                 each_list.pop(idx_of_line_to_be_removed)
+            if errs_files != None:
+                for each_list in accepted_errs:
+                    each_list.pop(idx_of_line_to_be_removed)
     # Create the table of Net Fluxes and EQWs
     if create_txt == True:
         txt_file = open(name_out_file, 'w+')
@@ -522,16 +540,24 @@ def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create
         else:
             print >> txt_file,   '#'
         print >> txt_file,   '#    NUV: wav <= 2000,   Opt: 2000 > wav < 5000,   NIR: wav >= 5000'
-        print >> txt_file,  ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('# Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
-        for cw, w, e, i, fd, h, s, F, C, ew in zip(accepted_cols_in_file[0], accepted_cols_in_file[1], accepted_cols_in_file[2], accepted_cols_in_file[3], accepted_cols_in_file[4], 
-                                                   accepted_cols_in_file[5], accepted_cols_in_file[6], accepted_cols_in_file[7], accepted_cols_in_file[8], accepted_cols_in_file[9]):
-            print >> txt_file,  ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
+        if errs_files != None:
+            print >> txt_file,  ('{:<12} {:<12} {:>10} {:<4} {:<9} {:>8} {:<9} {:<12} {:<10} {:<7} {:<12} {:<7} {:<6} {:<6}'.format('# Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'HowForb', 'Width[A]', 'Flux [cgs]', 'FluxErr', '%Err', 'Continuum [cgs]', 'EW [A]', 'EWErr', '%Err'))
+            for cw, w, e, i, fd, h, s, F, Fe, C, ew, ewe in zip(accepted_cols_in_file[0], accepted_cols_in_file[1], accepted_cols_in_file[2], accepted_cols_in_file[3], accepted_cols_in_file[4], 
+                                                       accepted_cols_in_file[5], accepted_cols_in_file[6], accepted_cols_in_file[7], accepted_errs[0], accepted_cols_in_file[8], accepted_cols_in_file[9], accepted_errs[1]):
+                Fep = (Fe * 100.) / numpy.abs(F)
+                ewep = (ewe * 100.) / numpy.abs(ew)
+                print >> txt_file,  ('{:<12.3f} {:<12.3f} {:>10} {:<6} {:<8} {:<8} {:<6} {:>12.3e} {:>10.3e} {:>6.1f} {:>13.3e} {:>10.3f} {:>6.3f} {:>6.1f}'.format(cw, w, e, i, fd, h, s, F, Fe, Fep, C, ew, ewe, ewep))
+        else:
+            print >> txt_file,  ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('# Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
+            for cw, w, e, i, fd, h, s, F, C, ew in zip(accepted_cols_in_file[0], accepted_cols_in_file[1], accepted_cols_in_file[2], accepted_cols_in_file[3], accepted_cols_in_file[4], 
+                                                       accepted_cols_in_file[5], accepted_cols_in_file[6], accepted_cols_in_file[7], accepted_cols_in_file[8], accepted_cols_in_file[9]):
+                print >> txt_file,  ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
         txt_file.close()
         print 'File   %s   writen!' % name_out_file
     if err_cont_fit != None:
-        return accepted_cols_in_file, all_err_fit
+        return accepted_cols_in_file, accepted_errs, all_err_fit
     else:
-        return accepted_cols_in_file
+        return accepted_cols_in_file, accepted_errs
     
 def get_err_cont_fit(text_file):
     f = open(text_file, 'r')
