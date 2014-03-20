@@ -453,6 +453,7 @@ def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create
     accepted_EW = []
     all_err_fit = []
     flux_errs = []
+    cont_errs = []
     ew_errs = []
     for spec in text_file_list:
         # read the file
@@ -468,7 +469,7 @@ def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create
                 efile = errs_files[1]
             elif 'nir' in spec:
                 efile = errs_files[2]
-            eff, efe = numpy.loadtxt(efile, skiprows=1, usecols=(2,8), unpack=True)
+            eff, efc, efe = numpy.loadtxt(efile, skiprows=1, usecols=(2,5,8), unpack=True)
         # Each spec contains the following:
         # 0=catalog_wavelength, 1=observed_wavelength, 2=element, 3=ion, 4=forbidden, 5=how_forbidden, 6=width, 7=flux, 8=continuum, 9=EW
         # These are lists, make the observed wavelengths a numpy array to choose the accepted range of data
@@ -511,11 +512,12 @@ def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create
             accepted_EW.append(cols_in_file[9][idx])
             if errs_files != None:
                 flux_errs.append(eff[idx])
+                cont_errs.append(efc[idx])
                 ew_errs.append(efe[idx])
     accepted_cols_in_file = [accepted_catalog_wavelength, accepted_observed_wavelength, accepted_element, accepted_ion, accepted_forbidden, 
                              accepted_how_forbidden, accepted_width, accepted_flux, accepted_continuum, accepted_EW]
     if errs_files != None:
-        accepted_errs = [flux_errs, ew_errs]
+        accepted_errs = [flux_errs, ew_errs, cont_errs]
     # Choose the right intensities if lines are repeated
     # There are no repetitions between the NUV and Opt but there could be a few from the Opt to the NIR. 
     # Because the sensibility of the detector is better with the g750l than with the g430l, we want to keep NIR the lines.
@@ -644,7 +646,7 @@ def n4airvac_conversion(wav):
     n = 1 + 6.4328e-5 + 2.94981e-2/(146*sigma_wav*sigma_wav) + 2.5540e-4/(41*sigma_wav*sigma_wav)
     return n
 
-def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, vacuum=False, faintObj=False, linesinfo_file_name=None, err_continuum=None):
+def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, vacuum=False, faintObj=False, linesinfo_file_name=None, do_errs=None):
     '''
     This function takes the object and continuum arrays to find the
     lines given in the lines_catalog.txt file.
@@ -742,6 +744,8 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
     found_ion = []
     found_ion_forbidden = []
     found_ion_how_forbidden = []
+    errs_net_fluxes = []
+    errs_ews = [] 
     # but choose the right wavelength column
     if vacuum == True:
         use_wavs = 1
@@ -750,6 +754,11 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
         use_wavs = 0
         use_wavs_text = '# Used AIR wavelengths to find lines from line_catalog.txt'
     print 'vacuum was set to %s, %s' % (vacuum, use_wavs_text)
+    if do_errs != None:
+        err_instrument, err_continuum = do_errs
+        perc_err_continuum = err_continuum*100.0
+        err_lists = get_flux_cont_errs(object_spectra, continuum, err_instrument, err_continuum)
+        # err_lists contains err_fluxes, err_contfl 
     for i in range(len(lines_catalog[0])):
         # find the line in the catalog that is closest to a 
         nearest2line = find_nearest_within(object_spectra[0], lines_catalog[use_wavs][i], 10.)
@@ -763,7 +772,12 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             lower_wav = central_wavelength - (line_width/2)
             upper_wav = central_wavelength + (line_width/2)
             width_list.append(line_width)
-            F, C, ew = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav)
+            if do_errs != None:
+                F, C, ew, err_F, err_ew = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=err_lists)
+                errs_net_fluxes.append(err_F)
+                errs_ews.append(err_ew)
+            else:
+                F, C, ew = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav)                
             continuum_list.append(C)
             net_fluxes_list.append(F)
             EWs_list.append(ew) 
@@ -778,8 +792,8 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             txt_file = open(linesinfo_file_name, 'w+')
             print >> txt_file,  use_wavs_text
             print >> txt_file,   '# Positive EW = emission        Negative EW = absorption' 
-            if err_continuum != None:
-                print >> txt_file,   '# Percentage Error of Continuum Fit = %0.2f' % err_continuum
+            if do_errs != None:
+                print >> txt_file,   '# Percentage Error of Continuum Fit = %0.2f' % perc_err_continuum
             else:
                 print >> txt_file,   '#'
             print >> txt_file,  ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('# Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
@@ -792,9 +806,26 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             print ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('# Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
             for cw, w, e, i, fd, h, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, found_element, found_ion, found_ion_forbidden, found_ion_how_forbidden, width_list, net_fluxes_list, continuum_list, EWs_list):
                 print ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
-        return catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list
+        if do_errs != None:
+            return catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list, errs_net_fluxes, errs_ews
+        else:
+            return catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list
     else:
-        return catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list
+        if do_errs != None:
+            return catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list, errs_net_fluxes, errs_ews
+        else:
+            return catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list
+
+def get_flux_cont_errs(object_spectra, continuum, err_instrument, err_continuum):
+    # Determine the absolute error and get the arrays of plus and minus fluxes
+    err_fluxes = []
+    err_contfl = []
+    for f, c in zip(object_spectra[1], continuum[1]):
+        ferr = f * err_instrument
+        err_fluxes.append(ferr)
+        cerr = c * err_continuum
+        err_contfl.append(cerr)
+    return err_fluxes, err_contfl
 
 def get_lineinfo_uncertainties(object_spectra, continuum, Halpha_width, faintObj, err_instrument, err_continuum):
     # Determine the absolute error and get the arrays of plus and minus fluxes
@@ -821,9 +852,9 @@ def get_lineinfo_uncertainties(object_spectra, continuum, Halpha_width, faintObj
     continuum_minus = numpy.array([wavelengths, err_contfl_minus])
     # Now run the plus and minus fluses through the lineinfo function
     object_lines_info_plus = find_lines_info(object_spectra_plus, continuum_plus, Halpha_width=Halpha_width, text_table=False,  
-                                             vacuum=False, faintObj=faintObj, linesinfo_file_name=None, err_continuum=None)
+                                             vacuum=False, faintObj=faintObj, linesinfo_file_name=None, do_errs=None)
     object_lines_info_minus = find_lines_info(object_spectra_minus, continuum_minus, Halpha_width=Halpha_width, text_table=False,  
-                                              vacuum=False, faintObj=faintObj, linesinfo_file_name=None, err_continuum=None)
+                                              vacuum=False, faintObj=faintObj, linesinfo_file_name=None, do_errs=None)
     # get the final error by assuming that it is symetric: (x_plus - x_minus)/2
     # line_info contains: catalog_wavs_found, central_wavelength_list, width_list, net_fluxes_list, continuum_list, EWs_list
     _, _, _, net_fluxes_list_plus, continuum_list_plus, EWs_list_plus = object_lines_info_plus
@@ -840,7 +871,7 @@ def get_lineinfo_uncertainties(object_spectra, continuum, Halpha_width, faintObj
         err_ews.append(numpy.abs(e_ew))
     return err_fluxes, err_continuum, err_ews
 
-def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav):
+def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=None):
     '''
     This function finds the integrated flux of the line given by the lower and upper
     wavelengths.
@@ -854,11 +885,27 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav):
     net_continua = continuum[1][(continuum[0] >= lower_wav) & (continuum[0] <= upper_wav)]
     C = midpoint(net_continua[0], net_continua[-1])
     # simple equivalent width routine
-    ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)
+    if do_errs != None:
+        ew, lower_wav, upper_wav, err_ew = EQW(object_spectra, continuum, lower_wav, upper_wav, do_errs)
+    else:
+        ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)        
     # determine equivalent width by finding the max or the min of the line
     #ew, lower_wav, upper_wav = find_EW(object_spectra, continuum, lower_wav, upper_wav)
     F = ew * C #* (-1)   # with the actual equivalent width definition
-    return F, C, ew
+    if do_errs != None:
+        if lower_wav < 2000.:
+            n=0 #this gets the percentage error of the continuum
+        elif (lower_wav >= 2000) and (lower_wav < 5000.):
+            n = len(do_errs[1])/2
+        elif lower_wav >= 5000.:
+            n = -1
+        err_perc = do_errs[1][n]/continuum[1][n] * 100. #this gets the percentage error of the continuum
+        errC = C * err_perc
+        err_F = numpy.abs(F) * numpy.sqrt( (err_ew/ew)*(err_ew/ew) + (errC/C)*(errC/C) - 2*((err_ew*errC)*(err_ew*errC))/(ew*C) )
+        #print 'F, err_F, C, errC, err_perc', F, err_F, C, errC, err_perc
+        return F, C, ew, err_F, err_ew
+    else:
+        return F, C, ew
 
 def theo_cont(wave_arr, scale_factor=1.0):
     '''
@@ -994,7 +1041,7 @@ def half_EQW_times2(data_arr, cont_arr, line, wave_limit, right_side=True):
     eqw = half_eqw * 2.0
     return(eqw)
 
-def EQW(data_arr, cont_arr, lower, upper):
+def EQW(data_arr, cont_arr, lower, upper, do_errs=None):
     '''
     This function detemrines the equivalent width integrating over the interval given by the lower and upper limits.
     *** THE DEFINITION OF EQW USED IS POSITIVE FOR EMISSION AND NEGATIVE FOR ABSORPTION
@@ -1048,9 +1095,20 @@ def EQW(data_arr, cont_arr, lower, upper):
     # Actually solving the eqw integral
     difference = 1 - (flux / flux_cont)
     eqw = sum(difference) * dlambda * (-1)   # the -1 is because of the definition of EQW        
-    #final_width = uplim - lolim
-    #print('center=', (uplim+lolim)/2.0,'  final_width = %f' % final_width, '    ew=', eqw)
-    return (eqw, lolim, uplim)
+    if do_errs != None:
+        errs_fluxes, errs_continuum = do_errs
+        err_diff = []
+        err_diff_sqrd = []
+        for f, c, ef, ec in zip(flux, flux_cont, errs_fluxes, errs_continuum):
+            ed = f/c * numpy.sqrt( (ec/f)*(ec/f) + (ef/c)*(ef/c) )
+            err_diff.append(ed)
+            err_diff_sqrd.append(ed*ed)
+        err_ew = dlambda * numpy.sqrt(sum(err_diff_sqrd))
+        return (eqw, lolim, uplim, err_ew)
+    else:
+        #final_width = uplim - lolim
+        #print('center=', (uplim+lolim)/2.0,'  final_width = %f' % final_width, '    ew=', eqw)
+        return (eqw, lolim, uplim)
 
 def EQW_iter(data_arr, cont_arr, line, guessed_width=3.0):
     '''
