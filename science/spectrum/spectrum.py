@@ -667,6 +667,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
     # continuum_list = the average continuum value over the line width
     # EWs_list = the list of EWs it calculated
     # if text_table=True a text file containing all this information
+    # do_errs = err_instrument, err_continuum  -- this is a list of two lists containing the instrument and continuum errors
     '''
     # Read the line_catalog file, assuming that the path is the same:
     # '/Users/name_of_home_directory/Documents/AptanaStudio3/science/science/spectrum/lines_catalog.txt'
@@ -899,7 +900,7 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=None
             n = len(do_errs[1])/2
         elif lower_wav >= 5000.:
             n = -1
-        err_perc = do_errs[1][n]/continuum[1][n] * 100. #this gets the percentage error of the continuum
+        err_perc = do_errs[1][n]/continuum[1][n]  #this gets the percentage error of the continuum
         errC = C * err_perc
         err_F = numpy.abs(F) * numpy.sqrt( (err_ew/ew)*(err_ew/ew) + (errC/C)*(errC/C) - 2*((err_ew*errC)*(err_ew*errC))/(ew*C) )
         #print 'F, err_F, C, errC, err_perc', F, err_F, C, errC, err_perc
@@ -1098,12 +1099,13 @@ def EQW(data_arr, cont_arr, lower, upper, do_errs=None):
     if do_errs != None:
         errs_fluxes, errs_continuum = do_errs
         err_diff = []
-        err_diff_sqrd = []
         for f, c, ef, ec in zip(flux, flux_cont, errs_fluxes, errs_continuum):
-            ed = f/c * numpy.sqrt( (ec/f)*(ec/f) + (ef/c)*(ef/c) )
+            #ed = (ec*ec)/(c*c) + (ef*ef)/(f*f) - 2*(ef*ef*ec*ec)/(f*c)
+            ed = (1/c * ef)**2 + (f/c * ec/c)**2 - 2*(ef*ef*ec*ec)/(f*c)
             err_diff.append(ed)
-            err_diff_sqrd.append(ed*ed)
-        err_ew = dlambda * numpy.sqrt(sum(err_diff_sqrd))
+        tot_err_diff = sum(err_diff)
+        err_ew = dlambda * numpy.abs(eqw) * numpy.sqrt(tot_err_diff)
+        #print 'lolim, uplim, ew, err_ew', lolim, uplim, eqw, err_ew
         return (eqw, lolim, uplim, err_ew)
     else:
         #final_width = uplim - lolim
