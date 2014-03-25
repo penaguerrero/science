@@ -97,7 +97,7 @@
 1901.77	Fe	2	no	NA	NA	nw
 1906.68	C	3	yes	semi	NA	nw
 1908.73	C	3	yes	semi	NA	nw
-1908.0000	C	3	yes	semi	NA	weak
+1908.0000	C	3	yes	semi	NA	no
 1922.79	Fe	3	no	NA	NA	nw
 1923.01	Fe	3	no	NA	NA	nw
 1923.88	Fe	3	no	NA	NA	nw
@@ -294,13 +294,13 @@
 4316.0000	Ne	1	no	NA	0.0123	no
 4317.14	O	2	no	NA	2	no
 4319.63	O	2	no	NA	2	no
-4340.47	H	1	no	NA	H5	weak
+4340.47	H	1	no	NA	H5	medium
 #4345.55	O	2	no	NA	65c	no
 #4345.56	O	2	no	NA	2	no
 4349.43	O	2	no	NA	2	no
 4351.81	Fe	2	yes	total	0.0331	no
 #4359.34	Fe	2	yes	total	F7	no
-4363.21	O	3	yes	total	F2	no
+4363.21	O	3	yes	total	F2	medium
 #4364.73	S	3	no	NA	7	no
 #4366.89	O	2	no	NA	2	no
 #4368.25	O	1	no	NA	5	no
@@ -391,10 +391,10 @@
 4931.8	O	3	yes	total	F1	no
 4931.0000	Fe	3	yes	total	F1	no
 #4933.79	0.0047	0.0045	no	NA	30	no
-4958.91	O	3	yes	total	F1	medium
+4958.91	O	3	yes	total	F1	yes
 4985.9	Fe	3	yes	total	F2	no
 #4987.2	Fe	3	yes	total	F2	no
-5006.84	O	3	yes	total	F1	yes
+5006.84	O	3	yes	total	F1	super
 #5011.3	Fe	3	yes	total	F1	no
 5015.68	He	1	no	NA	4	no
 #5032.4	Fe	4	yes	total	1	no
