@@ -718,21 +718,38 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
     # Determine the strength of the lines: no_and_weak(nw)=5A, no(with respect to strong lines)=7, weak=10, medium=15, yes=25, super=35
     width = []
     for sline in strong_line:
-        if sline == "nw":
-            s = 3.
-        elif sline == "no":
-            s = 7.
-        elif sline == "weak":
-            s = 10.
-        elif sline == "medium":
-            s = 17.0
-        elif sline == "yes":
-            s = 25.0
-        elif sline == "super":
-            s = 33.0
-        elif sline == "Halpha":
-            s = Halpha_width
-        width.append(s)
+        if faintObj != True:
+            if sline == "nw":
+                s = 4.0
+            elif sline == "no":
+                s = 6.5
+            elif sline == "weak":
+                s = 8.0
+            elif sline == "medium":
+                s = 15.0
+            elif sline == "yes":
+                s = 25.0
+            elif sline == "super":
+                s = 30.0
+            elif sline == "Halpha":
+                s = Halpha_width
+            width.append(s)
+        else:
+            if sline == "nw":
+                s = 3.0
+            elif sline == "no":
+                s = 5.0
+            elif sline == "weak":
+                s = 6.5
+            elif sline == "medium":
+                s = 12.0
+            elif sline == "yes":
+                s = 20.0
+            elif sline == "super":
+                s = 24.0
+            elif sline == "Halpha":
+                s = Halpha_width
+            width.append(s)
     # Search in the object given for the lines in the lines_catalog
     lines_catalog = (wavs_air, wavs_vacuum, element, ion, forbidden, how_forbidden, transition, width)
     net_fluxes_list = []
@@ -768,19 +785,20 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             # If the line is in the object spectra, measure the intensity and equivalent width
             # according to the strength of the line
             central_wavelength = object_spectra[0][(object_spectra[0] == nearest2line)]
-            central_wavelength_list.append(float(central_wavelength))
             line_width = lines_catalog[7][i]
             lower_wav = central_wavelength - (line_width/2)
             upper_wav = central_wavelength + (line_width/2)
-            width_list.append(line_width)
             if do_errs != None:
-                F, C, ew, err_F, err_ew = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=err_lists)
+                F, C, err_F, ew, lolim, uplim, err_ew = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=err_lists)
                 errs_net_fluxes.append(err_F)
                 errs_ews.append(err_ew)
             else:
                 F, C, ew, lolim, uplim = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav)   
-            final_width = uplim - lolim
-            print('center=', (uplim+lolim)/2.0,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew)
+            final_width = numpy.round(uplim - lolim, decimals=1)
+            central_wavelength = (uplim+lolim)/2.0
+            #print('center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew)
+            width_list.append(final_width)
+            central_wavelength_list.append(central_wavelength)
             continuum_list.append(C)
             net_fluxes_list.append(F)
             EWs_list.append(ew) 
@@ -894,10 +912,12 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=None
     if do_errs != None:
         #print 'do_errs != None'
         ew, lower_wav, upper_wav, err_ew = EQW(object_spectra, continuum, lower_wav, upper_wav, do_errs)
+        #ew = numpy.squeeze(ew)
+        #ew, lower_wav, upper_wav, err_ew = find_EW(object_spectra, continuum, lower_wav, upper_wav, do_errs)
     else:
-        #ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)        
+        ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)        
         # determine equivalent width by finding the max or the min of the line
-        ew, lower_wav, upper_wav = find_EW(object_spectra, continuum, lower_wav, upper_wav)
+        #ew, lower_wav, upper_wav = find_EW(object_spectra, continuum, lower_wav, upper_wav)
         #print 'I USED THE function that u want'
     F = ew * C #* (-1)   # with the actual equivalent width definition
     if do_errs != None:
@@ -909,9 +929,9 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=None
             n = -1
         err_perc = do_errs[1][n]/continuum[1][n]  #this gets the percentage error of the continuum
         errC = C * err_perc
-        err_F = numpy.abs(F) * numpy.sqrt( (err_ew/ew)*(err_ew/ew) + (errC/C)*(errC/C) - 2*((err_ew*errC)*(err_ew*errC))/(ew*C) )
+        err_F = numpy.abs(F) * numpy.sqrt( (err_ew/ew)**2 + (errC/C)**2 - 2*((err_ew*errC)**2/(ew*C)) )
         #print 'F, err_F, C, errC, err_perc', F, err_F, C, errC, err_perc
-        return F, C, ew, err_F, err_ew
+        return F, C, err_F, ew, lower_wav, upper_wav, err_ew
     else:
         return F, C, ew, lower_wav, upper_wav
 
@@ -1199,7 +1219,7 @@ def EQW_iter(data_arr, cont_arr, line, guessed_width=3.0):
     #print('final_width = %f' % final_width)
     return (eqw, lolim, uplim)
 
-def find_EW(data_arr, cont_arr, lower, upper):
+def find_EW(data_arr, cont_arr, lower, upper, do_errs=None):
     '''
     This function recenters the line according to the max or min (emission or absorption) and then adjusts 
     according to the min difference between the flux and the continuum.
@@ -1217,8 +1237,8 @@ def find_EW(data_arr, cont_arr, lower, upper):
     #print 'mid_w', mid_w
     midd_pont_flux = numpy.interp(mid_w, w, f)
     midd_pont_continuum = numpy.interp(mid_w, wc, fc)
-    #if midd_pont_continuum < 0.0:  # just in case the continuum went negative, make it positive!
-    #    midd_pont_continuum = midd_pont_continuum * (-1)
+    if midd_pont_continuum < 0.0:  # just in case the continuum went negative, make it positive!
+        midd_pont_continuum = midd_pont_continuum * (-1)
     emission = True
     if midd_pont_flux < midd_pont_continuum:
         emission = False
@@ -1238,27 +1258,62 @@ def find_EW(data_arr, cont_arr, lower, upper):
     flux_upper = line_flux[-1]
     cont_flux_lower = flux_cont[0]
     cont_flux_upper = flux_cont[-1]
-    left_diff = numpy.fabs(numpy.fabs(flux_lower) - numpy.fabs(cont_flux_lower))
-    right_diff = numpy.fabs(numpy.fabs(flux_upper) - numpy.fabs(cont_flux_upper))
+    left_diff_abs = numpy.fabs(numpy.fabs(flux_lower) - numpy.fabs(cont_flux_lower))
+    right_diff_abs = numpy.fabs(numpy.fabs(flux_upper) - numpy.fabs(cont_flux_upper))
     starting_point = lower
-    if left_diff < right_diff:
+    if left_diff_abs < right_diff_abs:
         starting_point = lower
-    elif left_diff > right_diff:
+        left_side = True
+    elif left_diff_abs > right_diff_abs:
         starting_point = upper
-    elif left_diff == right_diff:
+        left_side = False
+    elif left_diff_abs == right_diff_abs:
         #print 'Line is centered'
         pass
-    if starting_point == lower:
-        lolim = lower
-        uplim, _ = find_nearest(w, lolim+width)
-    elif starting_point == upper:
-        uplim = upper
-        lolim, _ = find_nearest(w, uplim-width)
+    # Make sure that we are indeed measurng the line
+    starting_point_flx = numpy.interp(starting_point, w, f)
+    cont_starting_point_flx = numpy.interp(starting_point, wc, fc)
+    if cont_starting_point_flx < 0.0:  # just in case the continuum went negative, make it positive!
+        cont_starting_point_flx = cont_starting_point_flx * (-1)
+    if emission:
+        #print 'starting_point is emmission... entering the while loop', starting_point
+        if starting_point_flx < cont_starting_point_flx:
+            end_loop = False
+            while end_loop == False:
+                #print 'in the while loop at', starting_point
+                starting_point = starting_point + 0.2
+                starting_point_flx = numpy.interp(starting_point, w, f)
+                cont_starting_point_flx = numpy.interp(starting_point, wc, fc)
+                if cont_starting_point_flx < 0.0:  # just in case the continuum went negative, make it positive!
+                    cont_starting_point_flx = cont_starting_point_flx * (-1)
+                if starting_point_flx >= cont_starting_point_flx:
+                    end_loop = True
+    if emission == False:
+        if starting_point_flx > cont_starting_point_flx:
+            end_loop = False
+            while end_loop == False:
+                starting_point = starting_point + 0.2
+                starting_point_flx = numpy.interp(starting_point, w, f)
+                cont_starting_point_flx = numpy.interp(starting_point, wc, fc)
+                if cont_starting_point_flx < 0.0:  # just in case the continuum went negative, make it positive!
+                    cont_starting_point_flx = cont_starting_point_flx * (-1)
+                if starting_point_flx <= cont_starting_point_flx:
+                    end_loop = True
+    if left_side:
+        lolim = starting_point
+        uplim = starting_point + width
+    else:
+        uplim = starting_point
+        lolim = starting_point - width
     # now determine the equivalent width
-    eqw, lolim, uplim = EQW(data_arr, cont_arr, lolim, uplim)
-    #final_width = uplim - lolim
-    #print('center=', (uplim+lolim)/2.0,'  final_width = %f' % final_width, '    ew=', eqw)
-    return (eqw, lolim, uplim)
+    if do_errs != None:
+        eqw, lolim, uplim , err_ew = EQW(data_arr, cont_arr, lolim, uplim, do_errs)
+        return (eqw, lolim, uplim, err_ew)
+    else:
+        eqw, lolim, uplim = EQW(data_arr, cont_arr, lolim, uplim)
+        #final_width = uplim - lolim
+        #print('center=', (uplim+lolim)/2.0,'  final_width = %f' % final_width, '    ew=', eqw)
+        return (eqw, lolim, uplim)
     
 #### Full width half maximum 
 def FWHM(sig):
