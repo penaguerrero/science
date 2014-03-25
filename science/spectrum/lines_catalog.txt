@@ -300,7 +300,7 @@
 4349.43	O	2	no	NA	2	no
 4351.81	Fe	2	yes	total	0.0331	no
 #4359.34	Fe	2	yes	total	F7	no
-4363.21	O	3	yes	total	F2	medium
+4363.21	O	3	yes	total	F2	weak
 #4364.73	S	3	no	NA	7	no
 #4366.89	O	2	no	NA	2	no
 #4368.25	O	1	no	NA	5	no
