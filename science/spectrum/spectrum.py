@@ -778,9 +778,9 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
                 errs_net_fluxes.append(err_F)
                 errs_ews.append(err_ew)
             else:
-                F, C, ew = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav)                
-            #final_width = upper_wav - lower_wav
-            #print('center=', (upper_wav+lower_wav)/2.0,'  final_width = %f' % final_width, '    ew=', ew)
+                F, C, ew, lolim, uplim = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav)   
+            final_width = uplim - lolim
+            print('center=', (uplim+lolim)/2.0,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew)
             continuum_list.append(C)
             net_fluxes_list.append(F)
             EWs_list.append(ew) 
@@ -885,8 +885,11 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=None
     FUNCTION RETURNS:
     # the net flux and corresponding continuum of the integration between lower and upper wavelengths
     '''
-    net_continua = continuum[1][(continuum[0] >= lower_wav) & (continuum[0] <= upper_wav)]
-    C = midpoint(net_continua[0], net_continua[-1])
+    net_continua_f = continuum[1][(continuum[0] >= lower_wav) & (continuum[0] <= upper_wav)]
+    #print 'len(net_continua)', len(net_continua_F)
+    #elements = 10
+    #_, _, _, net_continua_f = fill_EWarr(object_spectra, continuum, lower_wav, upper_wav, elements)
+    C = midpoint(net_continua_f[0], net_continua_f[-1])
     # simple equivalent width routine
     if do_errs != None:
         #print 'do_errs != None'
@@ -910,7 +913,7 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=None
         #print 'F, err_F, C, errC, err_perc', F, err_F, C, errC, err_perc
         return F, C, ew, err_F, err_ew
     else:
-        return F, C, ew
+        return F, C, ew, lower_wav, upper_wav
 
 def theo_cont(wave_arr, scale_factor=1.0):
     '''
@@ -1046,6 +1049,35 @@ def half_EQW_times2(data_arr, cont_arr, line, wave_limit, right_side=True):
     eqw = half_eqw * 2.0
     return(eqw)
 
+def fill_EWarr(data_arr, cont_arr, lolim, uplim, elements):
+    width = uplim - lolim
+    wavelength_list = []
+    flux_list = []
+    w_cont_list = [] 
+    flux_cont_list = []
+    increment = width / float(elements)
+    #print 'width, increment', width, increment
+    wavelength_list.append(lolim)
+    w_cont_list.append(lolim)
+    flolim = numpy.interp(lolim, data_arr[0], data_arr[1])
+    flux_list.append(flolim)
+    flolim_cont = numpy.interp(lolim, cont_arr[0], cont_arr[1])
+    flux_cont_list.append(flolim_cont)
+    w = lolim + increment
+    for _ in range(0, elements-1):
+        f = numpy.interp(w, data_arr[0], data_arr[1])
+        wavelength_list.append(w)
+        flux_list.append(f)
+        w_cont_list.append(w)
+        fc = numpy.interp(w, cont_arr[0], cont_arr[1])
+        flux_cont_list.append(fc)
+        w = w + increment
+    wavelength = numpy.array(wavelength_list)
+    flux = numpy.array(flux_list)
+    w_cont = numpy.array(w_cont_list)
+    flux_cont = numpy.array(flux_cont_list)
+    return wavelength, flux, w_cont, flux_cont
+
 def EQW(data_arr, cont_arr, lower, upper, do_errs=None):
     '''
     This function detemrines the equivalent width integrating over the interval given by the lower and upper limits.
@@ -1058,26 +1090,18 @@ def EQW(data_arr, cont_arr, lower, upper, do_errs=None):
     # THE DEFINITION OF EQW USED IS POSITIVE FOR EMISSION AND NEGATIVE FOR ABSORPTION
     '''
     # Finding closest wavelength to the desired lower and upper limits
-    lolim, _ = find_nearest(data_arr[0], lower)
-    uplim, _ = find_nearest(data_arr[0], upper)
+    lolim = lower# , _ = find_nearest(data_arr[0], lower)
+    uplim = upper#, _ = find_nearest(data_arr[0], upper)
     #print('Closest points in array to lower limit and upper limit: %f, %f' % (lolim, uplim))
     #width = uplim - lolim
     #print('Actual width = %f' % (width))
     # Finding the line arrays to use in the integration
-    wavelength, flux = selection(data_arr[0], data_arr[1], lolim, uplim)
-    w_cont, flux_cont = selection(cont_arr[0], cont_arr[1], lolim, uplim)
+    #wavelength, flux = selection(data_arr[0], data_arr[1], lolim, uplim)
+    #_, flux_cont = selection(cont_arr[0], cont_arr[1], lolim, uplim)
+    # Interpolate so that the flux selection array has 10 elements
+    elements = 10
+    wavelength, flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lolim, uplim, elements)
     '''
-    # Interpolate if the flux selection array is empty 
-    if len(flux_cont) == 0:
-        x_list = []
-        y_list = []
-        for i in range(len(flux)):
-            x = wavelength[i]
-            y = numpy.interp(x, cont_arr[0], cont_arr[1])
-            x_list.append(x)
-            y_list.append(y)
-        w_cont = numpy.array(x_list)
-        flux_cont = numpy.array(y_list)
     # In case arrays do not have the exact same wavelengths, I am rebinning the arrays to the same number of rows
     # so that the width remains the same.
     object_selection = numpy.array([wavelength, flux])
@@ -1185,42 +1209,35 @@ def find_EW(data_arr, cont_arr, lower, upper):
     lower = float(lower)
     upper = float(upper)
     width = upper - lower
-    print 'lower, upper, width', lower, upper, width
+    #print 'lower, upper, width', lower, upper, width
     w, f = data_arr
     wc, fc = cont_arr
     # Determine if it is an absorption or emission line
     mid_w = (upper + lower)/2.0
-    print 'mid_w', mid_w
-    _, midd_pont_wav_idx = find_nearest(w, mid_w)
-    midd_pont_flux = f[midd_pont_wav_idx]
-    midd_pont_continuum = fc[midd_pont_wav_idx]
+    #print 'mid_w', mid_w
+    midd_pont_flux = numpy.interp(mid_w, w, f)
+    midd_pont_continuum = numpy.interp(mid_w, wc, fc)
     #if midd_pont_continuum < 0.0:  # just in case the continuum went negative, make it positive!
     #    midd_pont_continuum = midd_pont_continuum * (-1)
     emission = True
     if midd_pont_flux < midd_pont_continuum:
         emission = False
     # Recenter the line according to the max or min in flux
-    line_wave = w[(w>=lower) & (w<=upper)]
-    line_flux = f[(w>=lower) & (w<=upper)]
-    print len(line_flux)
+    elements = 10
+    line_wave, line_flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
+    #print 'len(line_flux)', len(line_flux)
     line_peak = numpy.amax(line_flux)
     if emission == False:
         line_peak = numpy.amin(line_flux)
     _, new_center_idx = find_nearest(line_flux, line_peak)
     new_center = numpy.squeeze(line_wave[new_center_idx])
-    print 'THIS IS THE NEW CENTER OF THE LINE: ', new_center
+    #print 'THIS IS THE NEW CENTER OF THE LINE: ', new_center
     lower = new_center - width/2.0
     upper = new_center + width/2.0
-    # and make sure those numbers are actually in the array
-    _, lower_idx = find_nearest(w, lower)
-    _, upper_idx = find_nearest(w, upper)
-    lower = float(w[lower_idx])
-    upper = float(w[upper_idx])
-    # Determine wich one of the points is closer to the conituum line
-    flux_lower = numpy.squeeze(f[lower_idx])
-    flux_upper = numpy.squeeze(f[upper_idx])
-    cont_flux_lower = numpy.squeeze(fc[(wc == lower)])
-    cont_flux_upper = numpy.squeeze(fc[(wc == upper)])
+    flux_lower = line_flux[0]
+    flux_upper = line_flux[-1]
+    cont_flux_lower = flux_cont[0]
+    cont_flux_upper = flux_cont[-1]
     left_diff = numpy.fabs(numpy.fabs(flux_lower) - numpy.fabs(cont_flux_lower))
     right_diff = numpy.fabs(numpy.fabs(flux_upper) - numpy.fabs(cont_flux_upper))
     starting_point = lower
