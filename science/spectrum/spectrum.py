@@ -794,7 +794,8 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
                 errs_ews.append(err_ew)
             else:
                 F, C, ew, lolim, uplim = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav)   
-            final_width = numpy.round(uplim - lolim, decimals=1)
+            final_width = float(uplim - lolim)
+            final_width = numpy.round(final_width, decimals=1)
             central_wavelength = (uplim+lolim)/2.0
             #print('center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew)
             width_list.append(final_width)
@@ -819,7 +820,8 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
                 print >> txt_file,   '#'
             print >> txt_file,  ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('# Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
             for cw, w, e, i, fd, h, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, found_element, found_ion, found_ion_forbidden, found_ion_how_forbidden, width_list, net_fluxes_list, continuum_list, EWs_list):
-                print >> txt_file,  ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
+                print 'cw:',type(cw), 'w:',type(w), 'e:',type(e), 'i:',type(i), 'fd:',type(fd), 'h:',type(h), 's:',type(s), 'F:',type(F), 'C:',type(C), 'ew:',type(ew)
+                print >> txt_file,  ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<10.2f} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
             txt_file.close()
             print 'File   %s   writen!' % linesinfo_file_name
         elif text_table == False:
@@ -919,6 +921,7 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=None
         # determine equivalent width by finding the max or the min of the line
         #ew, lower_wav, upper_wav = find_EW(object_spectra, continuum, lower_wav, upper_wav)
         #print 'I USED THE function that u want'
+    ew = float(ew)
     F = ew * C #* (-1)   # with the actual equivalent width definition
     if do_errs != None:
         if lower_wav < 2000.:
