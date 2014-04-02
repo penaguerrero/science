@@ -796,7 +796,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
                 F, C, ew, lolim, uplim = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav)   
             final_width = float(uplim - lolim)
             final_width = numpy.round(final_width, decimals=1)
-            central_wavelength = (uplim+lolim)/2.0
+            central_wavelength = float((uplim+lolim)/2.0)
             #print('center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew)
             width_list.append(final_width)
             central_wavelength_list.append(central_wavelength)
@@ -820,7 +820,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
                 print >> txt_file,   '#'
             print >> txt_file,  ('{:<12} {:<12} {:>12} {:<12} {:<12} {:<12} {:<12} {:>16} {:>16} {:>12}'.format('# Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'How much', 'Width[A]', 'Flux [cgs]', 'Continuum [cgs]', 'EW [A]'))
             for cw, w, e, i, fd, h, s, F, C, ew in zip(catalog_wavs_found, central_wavelength_list, found_element, found_ion, found_ion_forbidden, found_ion_how_forbidden, width_list, net_fluxes_list, continuum_list, EWs_list):
-                print 'cw:',type(cw), 'w:',type(w), 'e:',type(e), 'i:',type(i), 'fd:',type(fd), 'h:',type(h), 's:',type(s), 'F:',type(F), 'C:',type(C), 'ew:',type(ew)
+                #print 'cw:',type(cw), 'w:',type(w), 'e:',type(e), 'i:',type(i), 'fd:',type(fd), 'h:',type(h), 's:',type(s), 'F:',type(F), 'C:',type(C), 'ew:',type(ew)
                 print >> txt_file,  ('{:<12.3f} {:<12.3f} {:>12} {:<12} {:<12} {:<12} {:<10.2f} {:>16.3e} {:>16.3e} {:>12.3f}'.format(cw, w, e, i, fd, h, s, F, C, ew))
             txt_file.close()
             print 'File   %s   writen!' % linesinfo_file_name
@@ -913,9 +913,9 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=None
     # simple equivalent width routine
     if do_errs != None:
         #print 'do_errs != None'
-        ew, lower_wav, upper_wav, err_ew = EQW(object_spectra, continuum, lower_wav, upper_wav, do_errs)
+        #ew, lower_wav, upper_wav, err_ew = EQW(object_spectra, continuum, lower_wav, upper_wav, do_errs)
         #ew = numpy.squeeze(ew)
-        #ew, lower_wav, upper_wav, err_ew = find_EW(object_spectra, continuum, lower_wav, upper_wav, do_errs)
+        ew, lower_wav, upper_wav, err_ew = find_EW(object_spectra, continuum, lower_wav, upper_wav, do_errs)
     else:
         ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)        
         # determine equivalent width by finding the max or the min of the line
@@ -1113,8 +1113,8 @@ def EQW(data_arr, cont_arr, lower, upper, do_errs=None):
     # THE DEFINITION OF EQW USED IS POSITIVE FOR EMISSION AND NEGATIVE FOR ABSORPTION
     '''
     # Finding closest wavelength to the desired lower and upper limits
-    lolim = lower# , _ = find_nearest(data_arr[0], lower)
-    uplim = upper#, _ = find_nearest(data_arr[0], upper)
+    #lolim, _ = find_nearest(data_arr[0], lower)
+    #uplim, _ = find_nearest(data_arr[0], upper)
     #print('Closest points in array to lower limit and upper limit: %f, %f' % (lolim, uplim))
     #width = uplim - lolim
     #print('Actual width = %f' % (width))
@@ -1122,6 +1122,8 @@ def EQW(data_arr, cont_arr, lower, upper, do_errs=None):
     #wavelength, flux = selection(data_arr[0], data_arr[1], lolim, uplim)
     #_, flux_cont = selection(cont_arr[0], cont_arr[1], lolim, uplim)
     # Interpolate so that the flux selection array has 10 elements
+    lolim = lower
+    uplim = upper
     elements = 10
     wavelength, flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lolim, uplim, elements)
     '''
@@ -1151,8 +1153,8 @@ def EQW(data_arr, cont_arr, lower, upper, do_errs=None):
         errs_fluxes, errs_continuum = do_errs
         err_diff = []
         for f, c, ef, ec in zip(flux, flux_cont, errs_fluxes, errs_continuum):
-            #ed = (ec*ec)/(c*c) + (ef*ef)/(f*f) - 2*(ef*ef*ec*ec)/(f*c)
-            ed = (1/c * ef)**2 + (f/c * ec/c)**2 - 2*(ef*ef*ec*ec)/(f*c)
+            ed = (ec*ec)/(c*c) + (ef*ef)/(f*f) - 2*(ef*ef*ec*ec)/(f*c)
+            #ed = (1/c * ef)**2 + (f/c * ec/c)**2 - 2*(ef*ef*ec*ec)/(f*c)
             err_diff.append(ed)
         tot_err_diff = sum(err_diff)
         err_ew = dlambda * numpy.abs(eqw) * numpy.sqrt(tot_err_diff)
@@ -1273,11 +1275,13 @@ def find_EW(data_arr, cont_arr, lower, upper, do_errs=None):
     elif left_diff_abs == right_diff_abs:
         #print 'Line is centered'
         pass
+    '''
     # Make sure that we are indeed measurng the line
     starting_point_flx = numpy.interp(starting_point, w, f)
     cont_starting_point_flx = numpy.interp(starting_point, wc, fc)
     if cont_starting_point_flx < 0.0:  # just in case the continuum went negative, make it positive!
         cont_starting_point_flx = cont_starting_point_flx * (-1)
+    print'this is a new line: ', mid_w
     if emission:
         #print 'starting_point is emmission... entering the while loop', starting_point
         if starting_point_flx < cont_starting_point_flx:
@@ -1289,8 +1293,17 @@ def find_EW(data_arr, cont_arr, lower, upper, do_errs=None):
                 cont_starting_point_flx = numpy.interp(starting_point, wc, fc)
                 if cont_starting_point_flx < 0.0:  # just in case the continuum went negative, make it positive!
                     cont_starting_point_flx = cont_starting_point_flx * (-1)
-                if starting_point_flx >= cont_starting_point_flx:
+                diff = numpy.abs(starting_point - mid_w)
+                print 'starting_point, diff', starting_point, diff
+                if (starting_point_flx >= cont_starting_point_flx) or (diff <= 4.0):
                     end_loop = True
+                    if diff <= 4.0:
+                        if left_side:
+                            print 'was left'
+                            starting_point = lower + 1.5
+                        else:
+                            print'was right'
+                            starting_point = upper - 1.5
     if emission == False:
         if starting_point_flx > cont_starting_point_flx:
             end_loop = False
@@ -1302,6 +1315,15 @@ def find_EW(data_arr, cont_arr, lower, upper, do_errs=None):
                     cont_starting_point_flx = cont_starting_point_flx * (-1)
                 if starting_point_flx <= cont_starting_point_flx:
                     end_loop = True
+                diff = numpy.abs(starting_point - mid_w)
+                if (starting_point_flx >= cont_starting_point_flx) or (diff <= 4.0):
+                    end_loop = True
+                    if diff <= 4.0:
+                        if left_side:
+                            starting_point = lower + 1.5
+                        else:
+                            starting_point = upper - 1.5
+    '''
     if left_side:
         lolim = starting_point
         uplim = starting_point + width
