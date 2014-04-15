@@ -9,6 +9,7 @@ from scipy import optimize
 from pprint import pprint
 from scipy import stats
 from matplotlib import pyplot
+#from __future__ import division
 #from uncertainties import unumpy
 #from uncertainties import ufloat
 #from numba import autojit
@@ -720,17 +721,17 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
     for sline in strong_line:
         if faintObj != True:
             if sline == "nw":
-                s = 4.0
+                s = 3.0
             elif sline == "no":
                 s = 6.5
             elif sline == "weak":
-                s = 8.0
+                s = 10.0
             elif sline == "medium":
                 s = 15.0
             elif sline == "yes":
                 s = 25.0
             elif sline == "super":
-                s = 30.0
+                s = .0
             elif sline == "Halpha":
                 s = Halpha_width
             width.append(s)
@@ -788,6 +789,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             line_width = lines_catalog[7][i]
             lower_wav = central_wavelength - (line_width/2)
             upper_wav = central_wavelength + (line_width/2)
+            #print 'looking for ', lines_catalog[use_wavs][i]
             if do_errs != None:
                 F, C, err_F, ew, lolim, uplim, err_ew = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=err_lists)
                 errs_net_fluxes.append(err_F)
@@ -897,13 +899,17 @@ def get_lineinfo_uncertainties(object_spectra, continuum, Halpha_width, faintObj
 def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=None):
     '''
     This function finds the integrated flux of the line given by the lower and upper
-    wavelengths.
+    wavelengths, along with the continuum value, and the equivalent width.
     REQUIREMENTS:
     # object_spectra = the 2D array of wavelength and flux
     # continuum = the 2D array of wavelength and flux for the continuum
     # lower_wav, upper_wav = limits of integration
     FUNCTION RETURNS:
     # the net flux and corresponding continuum of the integration between lower and upper wavelengths
+    # upper and lower limits of the integration
+    # equivalent with
+    # continuum value
+    # (only if asked for) errors in the flux and EW 
     '''
     net_continua_f = continuum[1][(continuum[0] >= lower_wav) & (continuum[0] <= upper_wav)]
     #print 'len(net_continua)', len(net_continua_F)
@@ -1113,30 +1119,18 @@ def EQW(data_arr, cont_arr, lower, upper, do_errs=None):
     # THE DEFINITION OF EQW USED IS POSITIVE FOR EMISSION AND NEGATIVE FOR ABSORPTION
     '''
     # Finding closest wavelength to the desired lower and upper limits
-    #lolim, _ = find_nearest(data_arr[0], lower)
-    #uplim, _ = find_nearest(data_arr[0], upper)
-    #print('Closest points in array to lower limit and upper limit: %f, %f' % (lolim, uplim))
-    #width = uplim - lolim
+    #lower, _ = find_nearest(data_arr[0], lower)
+    #upper, _ = find_nearest(data_arr[0], upper)
+    #print('Closest points in array to lower limit and upper limit: %f, %f' % (lower, upper))
+    #width = upper - lower
     #print('Actual width = %f' % (width))
     # Finding the line arrays to use in the integration
-    #wavelength, flux = selection(data_arr[0], data_arr[1], lolim, uplim)
-    #_, flux_cont = selection(cont_arr[0], cont_arr[1], lolim, uplim)
+    #wavelength, flux = selection(data_arr[0], data_arr[1], lower, upper)
+    #_, flux_cont = selection(cont_arr[0], cont_arr[1], lower, upper)
+    
     # Interpolate so that the flux selection array has 10 elements
-    lolim = lower
-    uplim = upper
-    elements = 10
-    wavelength, flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lolim, uplim, elements)
-    '''
-    # In case arrays do not have the exact same wavelengths, I am rebinning the arrays to the same number of rows
-    # so that the width remains the same.
-    object_selection = numpy.array([wavelength, flux])
-    continuum_selection = numpy.array([w_cont, flux_cont])
-    rows = len(wavelength)
-    object_selection, continuum_selection, _, _ = rebin_to_desired_rows(object_selection, continuum_selection, rows)
-    w = object_selection[0]
-    f = object_selection[1]
-    f_cont = continuum_selection[1]
-    ''' 
+    elements = 9
+    wavelength, flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
     # Finding the average step for the integral
     N = len(wavelength)
     i = 0
@@ -1158,12 +1152,12 @@ def EQW(data_arr, cont_arr, lower, upper, do_errs=None):
             err_diff.append(ed)
         tot_err_diff = sum(err_diff)
         err_ew = dlambda * numpy.abs(eqw) * numpy.sqrt(tot_err_diff)
-        #print 'lolim, uplim, ew, err_ew', lolim, uplim, eqw, err_ew
-        return (eqw, lolim, uplim, err_ew)
+        #print 'lower, upper, ew, err_ew', lower, upper, eqw, err_ew
+        return (eqw, lower, upper, err_ew)
     else:
-        #final_width = uplim - lolim
-        #print('center=', (uplim+lolim)/2.0,'  final_width = %f' % final_width, '    ew=', eqw)
-        return (eqw, lolim, uplim)
+        #final_width = upper - lower
+        #print('center=', (upper+lower)/2.0,'  final_width = %f' % final_width, '    ew=', eqw)
+        return (eqw, lower, upper)
 
 def EQW_iter(data_arr, cont_arr, line, guessed_width=3.0):
     '''
@@ -1233,103 +1227,44 @@ def find_EW(data_arr, cont_arr, lower, upper, do_errs=None):
     '''
     lower = float(lower)
     upper = float(upper)
-    width = upper - lower
+    original_width = upper - lower
     #print 'lower, upper, width', lower, upper, width
-    w, f = data_arr
-    wc, fc = cont_arr
     # Determine if it is an absorption or emission line
-    mid_w = (upper + lower)/2.0
-    #print 'mid_w', mid_w
-    midd_pont_flux = numpy.interp(mid_w, w, f)
-    midd_pont_continuum = numpy.interp(mid_w, wc, fc)
-    if midd_pont_continuum < 0.0:  # just in case the continuum went negative, make it positive!
-        midd_pont_continuum = midd_pont_continuum * (-1)
-    emission = True
-    if midd_pont_flux < midd_pont_continuum:
-        emission = False
-    # Recenter the line according to the max or min in flux
-    elements = 10
+    original_center = (upper + lower)/2.0
+    # Recenter the line according to the max in the sqared fluxes
+    elements = 9
     line_wave, line_flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
-    #print 'len(line_flux)', len(line_flux)
-    line_peak = numpy.amax(line_flux)
-    if emission == False:
-        line_peak = numpy.amin(line_flux)
-    _, new_center_idx = find_nearest(line_flux, line_peak)
-    new_center = numpy.squeeze(line_wave[new_center_idx])
-    #print 'THIS IS THE NEW CENTER OF THE LINE: ', new_center
-    lower = new_center - width/2.0
-    upper = new_center + width/2.0
-    flux_lower = line_flux[0]
-    flux_upper = line_flux[-1]
-    cont_flux_lower = flux_cont[0]
-    cont_flux_upper = flux_cont[-1]
-    left_diff_abs = numpy.fabs(numpy.fabs(flux_lower) - numpy.fabs(cont_flux_lower))
-    right_diff_abs = numpy.fabs(numpy.fabs(flux_upper) - numpy.fabs(cont_flux_upper))
-    starting_point = lower
-    if left_diff_abs < right_diff_abs:
-        starting_point = lower
-        left_side = True
-    elif left_diff_abs > right_diff_abs:
-        starting_point = upper
-        left_side = False
-    elif left_diff_abs == right_diff_abs:
-        #print 'Line is centered'
-        pass
-    '''
-    # Make sure that we are indeed measurng the line
-    starting_point_flx = numpy.interp(starting_point, w, f)
-    cont_starting_point_flx = numpy.interp(starting_point, wc, fc)
-    if cont_starting_point_flx < 0.0:  # just in case the continuum went negative, make it positive!
-        cont_starting_point_flx = cont_starting_point_flx * (-1)
-    print'this is a new line: ', mid_w
-    if emission:
-        #print 'starting_point is emmission... entering the while loop', starting_point
-        if starting_point_flx < cont_starting_point_flx:
-            end_loop = False
-            while end_loop == False:
-                #print 'in the while loop at', starting_point
-                starting_point = starting_point + 0.2
-                starting_point_flx = numpy.interp(starting_point, w, f)
-                cont_starting_point_flx = numpy.interp(starting_point, wc, fc)
-                if cont_starting_point_flx < 0.0:  # just in case the continuum went negative, make it positive!
-                    cont_starting_point_flx = cont_starting_point_flx * (-1)
-                diff = numpy.abs(starting_point - mid_w)
-                print 'starting_point, diff', starting_point, diff
-                if (starting_point_flx >= cont_starting_point_flx) or (diff <= 4.0):
-                    end_loop = True
-                    if diff <= 4.0:
-                        if left_side:
-                            print 'was left'
-                            starting_point = lower + 1.5
-                        else:
-                            print'was right'
-                            starting_point = upper - 1.5
-    if emission == False:
-        if starting_point_flx > cont_starting_point_flx:
-            end_loop = False
-            while end_loop == False:
-                starting_point = starting_point + 0.2
-                starting_point_flx = numpy.interp(starting_point, w, f)
-                cont_starting_point_flx = numpy.interp(starting_point, wc, fc)
-                if cont_starting_point_flx < 0.0:  # just in case the continuum went negative, make it positive!
-                    cont_starting_point_flx = cont_starting_point_flx * (-1)
-                if starting_point_flx <= cont_starting_point_flx:
-                    end_loop = True
-                diff = numpy.abs(starting_point - mid_w)
-                if (starting_point_flx >= cont_starting_point_flx) or (diff <= 4.0):
-                    end_loop = True
-                    if diff <= 4.0:
-                        if left_side:
-                            starting_point = lower + 1.5
-                        else:
-                            starting_point = upper - 1.5
-    '''
-    if left_side:
-        lolim = starting_point
-        uplim = starting_point + width
+    # just in case the continuum went negative, make it positive! This works for absorption and emission....  :)    
+    sq_fluxes = []
+    for lf, cf in zip(line_flux, flux_cont):
+        sq_fluxes.append(lf*lf)
+    line_peak = max(sq_fluxes)
+    idx_line_peak = sq_fluxes.index(line_peak)
+    recenter = line_wave[idx_line_peak]
+    lower = recenter - (original_width/2.0)
+    upper = recenter + (original_width/2.0)
+    line_wave, line_flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
+    sq_fluxes = []
+    sq_contfluxes = []
+    for lf, cf in zip(line_flux, flux_cont):
+        sq_fluxes.append(lf*lf)
+        sq_contfluxes.append(cf*cf)
+    # Find out in the line array where is the point closest to the continuum to recenter the line according to it
+    diffs_list = []
+    for sf, scf in zip(sq_fluxes, sq_contfluxes):
+        diff = sf - scf
+        diffs_list.append(diff)
+    min_diff = min(diffs_list)
+    min_idx = diffs_list.index(min_diff)
+    wav_min_diff = line_wave[min_idx] 
+    if wav_min_diff < original_center:
+        lolim = wav_min_diff
+        uplim = lolim + original_width
     else:
-        uplim = starting_point
-        lolim = starting_point - width
+        uplim = wav_min_diff
+        lolim = uplim - original_width
+    new_center = (lolim + uplim) / 2.0
+    #print 'ORIGINAL CENTER=', original_center, '   NEW CENTER OF THE LINE=', new_center
     # now determine the equivalent width
     if do_errs != None:
         eqw, lolim, uplim , err_ew = EQW(data_arr, cont_arr, lolim, uplim, do_errs)
