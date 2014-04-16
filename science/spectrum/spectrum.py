@@ -1,3 +1,4 @@
+from __future__ import division
 import numpy
 #import math
 import os
@@ -9,7 +10,6 @@ from scipy import optimize
 from pprint import pprint
 from scipy import stats
 from matplotlib import pyplot
-#from __future__ import division
 #from uncertainties import unumpy
 #from uncertainties import ufloat
 #from numba import autojit
@@ -725,13 +725,13 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             elif sline == "no":
                 s = 6.5
             elif sline == "weak":
-                s = 10.0
+                s = 9.0
             elif sline == "medium":
                 s = 15.0
             elif sline == "yes":
-                s = 25.0
+                s = 20.0
             elif sline == "super":
-                s = .0
+                s = 25.0
             elif sline == "Halpha":
                 s = Halpha_width
             width.append(s)
@@ -745,9 +745,9 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             elif sline == "medium":
                 s = 12.0
             elif sline == "yes":
-                s = 20.0
+                s = 18.0
             elif sline == "super":
-                s = 24.0
+                s = 20.0
             elif sline == "Halpha":
                 s = Halpha_width
             width.append(s)
@@ -800,6 +800,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             final_width = numpy.round(final_width, decimals=1)
             central_wavelength = float((uplim+lolim)/2.0)
             #print('center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew)
+            #print('center=', central_wavelength,'  Flux=',F, '  ew=', ew)
             width_list.append(final_width)
             central_wavelength_list.append(central_wavelength)
             continuum_list.append(C)
@@ -926,10 +927,11 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=None
         ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)        
         # determine equivalent width by finding the max or the min of the line
         #ew, lower_wav, upper_wav = find_EW(object_spectra, continuum, lower_wav, upper_wav)
-        #print 'I USED THE function that u want'
+        #print 'I USED THE function that U want'
     ew = float(ew)
     F = ew * C #* (-1)   # with the actual equivalent width definition
     if do_errs != None:
+        '''
         if lower_wav < 2000.:
             n=0 #this gets the percentage error of the continuum
         elif (lower_wav >= 2000) and (lower_wav < 5000.):
@@ -939,7 +941,9 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=None
         err_perc = do_errs[1][n]/continuum[1][n]  #this gets the percentage error of the continuum
         errC = C * err_perc
         err_F = numpy.abs(F) * numpy.sqrt( (err_ew/ew)**2 + (errC/C)**2 - 2*((err_ew*errC)**2/(ew*C)) )
-        #print 'F, err_F, C, errC, err_perc', F, err_F, C, errC, err_perc
+        print 'F, err_F, C, errC, err_perc', F, err_F, C, errC, err_perc
+        '''
+        err_F = 0.0  # THIS IS ONLY TEMPORARY!!!
         return F, C, err_F, ew, lower_wav, upper_wav, err_ew
     else:
         return F, C, ew, lower_wav, upper_wav
@@ -1147,7 +1151,8 @@ def EQW(data_arr, cont_arr, lower, upper, do_errs=None):
         errs_fluxes, errs_continuum = do_errs
         err_diff = []
         for f, c, ef, ec in zip(flux, flux_cont, errs_fluxes, errs_continuum):
-            ed = (ec*ec)/(c*c) + (ef*ef)/(f*f) - 2*(ef*ef*ec*ec)/(f*c)
+            ed = (ec*ec)/(c*c) + (ef*ef)/(f*f)
+            #ed = (ec*ec)/(c*c) + (ef*ef)/(f*f) - 2*(ef*ef*ec*ec)/(f*c)   # Only if the errors are indeed correlated
             #ed = (1/c * ef)**2 + (f/c * ec/c)**2 - 2*(ef*ef*ec*ec)/(f*c)
             err_diff.append(ed)
         tot_err_diff = sum(err_diff)
@@ -1271,8 +1276,7 @@ def find_EW(data_arr, cont_arr, lower, upper, do_errs=None):
         return (eqw, lolim, uplim, err_ew)
     else:
         eqw, lolim, uplim = EQW(data_arr, cont_arr, lolim, uplim)
-        #final_width = uplim - lolim
-        #print('center=', (uplim+lolim)/2.0,'  final_width = %f' % final_width, '    ew=', eqw)
+        #print('center=', new_center,'  final_width = %f' % uplim - lolim, '    ew=', eqw)
         return (eqw, lolim, uplim)
     
 #### Full width half maximum 
