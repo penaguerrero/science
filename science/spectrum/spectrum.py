@@ -723,7 +723,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             if sline == "nw":
                 s = 3.0
             elif sline == "no":
-                s = 6.5
+                s = 6.0
             elif sline == "weak":
                 s = 9.0
             elif sline == "medium":
@@ -747,7 +747,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             elif sline == "yes":
                 s = 18.0
             elif sline == "super":
-                s = 20.0
+                s = 22.0
             elif sline == "Halpha":
                 s = Halpha_width
             width.append(s)
@@ -789,7 +789,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             line_width = lines_catalog[7][i]
             lower_wav = central_wavelength - (line_width/2)
             upper_wav = central_wavelength + (line_width/2)
-            #print 'looking for ', lines_catalog[use_wavs][i]
+            print 'looking for ', lines_catalog[use_wavs][i]
             if do_errs != None:
                 F, C, err_F, ew, lolim, uplim, err_ew = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=err_lists)
                 errs_net_fluxes.append(err_F)
@@ -800,7 +800,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             final_width = numpy.round(final_width, decimals=1)
             central_wavelength = float((uplim+lolim)/2.0)
             #print('center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew)
-            #print('center=', central_wavelength,'  Flux=',F, '  ew=', ew)
+            print 'center=', central_wavelength,'  Flux=',F, '  ew=', ew, '  from ', lower_wav, '  to ', upper_wav
             width_list.append(final_width)
             central_wavelength_list.append(central_wavelength)
             continuum_list.append(C)
@@ -924,12 +924,13 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=None
         #ew = numpy.squeeze(ew)
         ew, lower_wav, upper_wav, err_ew = find_EW(object_spectra, continuum, lower_wav, upper_wav, do_errs)
     else:
-        ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)        
+        #ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)        
         # determine equivalent width by finding the max or the min of the line
-        #ew, lower_wav, upper_wav = find_EW(object_spectra, continuum, lower_wav, upper_wav)
+        ew, lower_wav, upper_wav = find_EW(object_spectra, continuum, lower_wav, upper_wav)
         #print 'I USED THE function that U want'
     ew = float(ew)
     F = ew * C #* (-1)   # with the actual equivalent width definition
+    #print (lower_wav+upper_wav)/2.0, ' F=', F, 'ew=', ew, '  from ', lower_wav, '  to ', upper_wav
     if do_errs != None:
         '''
         if lower_wav < 2000.:
@@ -1096,15 +1097,15 @@ def fill_EWarr(data_arr, cont_arr, lolim, uplim, elements):
     flux_list.append(flolim)
     flolim_cont = numpy.interp(lolim, cont_arr[0], cont_arr[1])
     flux_cont_list.append(flolim_cont)
-    w = lolim + increment
+    w = lolim
     for _ in range(0, elements-1):
+        w = w + increment
         f = numpy.interp(w, data_arr[0], data_arr[1])
         wavelength_list.append(w)
         flux_list.append(f)
         w_cont_list.append(w)
         fc = numpy.interp(w, cont_arr[0], cont_arr[1])
         flux_cont_list.append(fc)
-        w = w + increment
     wavelength = numpy.array(wavelength_list)
     flux = numpy.array(flux_list)
     w_cont = numpy.array(w_cont_list)
@@ -1133,7 +1134,7 @@ def EQW(data_arr, cont_arr, lower, upper, do_errs=None):
     #_, flux_cont = selection(cont_arr[0], cont_arr[1], lower, upper)
     
     # Interpolate so that the flux selection array has 10 elements
-    elements = 9
+    elements = 10
     wavelength, flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
     # Finding the average step for the integral
     N = len(wavelength)
@@ -1157,11 +1158,12 @@ def EQW(data_arr, cont_arr, lower, upper, do_errs=None):
             err_diff.append(ed)
         tot_err_diff = sum(err_diff)
         err_ew = dlambda * numpy.abs(eqw) * numpy.sqrt(tot_err_diff)
-        #print 'lower, upper, ew, err_ew', lower, upper, eqw, err_ew
+        print 'lower, upper, ew, err_ew', lower, upper, eqw, err_ew
         return (eqw, lower, upper, err_ew)
     else:
         #final_width = upper - lower
         #print('center=', (upper+lower)/2.0,'  final_width = %f' % final_width, '    ew=', eqw)
+        print 'lower, upper, ew', lower, upper, eqw
         return (eqw, lower, upper)
 
 def EQW_iter(data_arr, cont_arr, line, guessed_width=3.0):
@@ -1227,8 +1229,8 @@ def find_EW(data_arr, cont_arr, lower, upper, do_errs=None):
     '''
     This function recenters the line according to the max or min (emission or absorption) and then adjusts 
     according to the min difference between the flux and the continuum.
-    lower = closest point in the wavelength array to lower part of the predefined width of the line
-    upper = closest point in the wavelength array to upper part of the predefined width of the line
+    low = closest point in the wavelength array to lower part of the predefined width of the line
+    upp = closest point in the wavelength array to upper part of the predefined width of the line
     '''
     lower = float(lower)
     upper = float(upper)
@@ -1237,9 +1239,10 @@ def find_EW(data_arr, cont_arr, lower, upper, do_errs=None):
     # Determine if it is an absorption or emission line
     original_center = (upper + lower)/2.0
     # Recenter the line according to the max in the sqared fluxes
-    elements = 9
+    elements = 30
     line_wave, line_flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
     # just in case the continuum went negative, make it positive! This works for absorption and emission....  :)    
+    '''
     sq_fluxes = []
     for lf, cf in zip(line_flux, flux_cont):
         sq_fluxes.append(lf*lf)
@@ -1248,7 +1251,10 @@ def find_EW(data_arr, cont_arr, lower, upper, do_errs=None):
     recenter = line_wave[idx_line_peak]
     lower = recenter - (original_width/2.0)
     upper = recenter + (original_width/2.0)
+    print 'ORIGINAL CENTER=', original_center, '   recenter=',recenter, lower, upper
     line_wave, line_flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
+    ''
+    print line_wave
     sq_fluxes = []
     sq_contfluxes = []
     for lf, cf in zip(line_flux, flux_cont):
@@ -1256,11 +1262,18 @@ def find_EW(data_arr, cont_arr, lower, upper, do_errs=None):
         sq_contfluxes.append(cf*cf)
     # Find out in the line array where is the point closest to the continuum to recenter the line according to it
     diffs_list = []
-    for sf, scf in zip(sq_fluxes, sq_contfluxes):
-        diff = sf - scf
+    for lw, sf, scf in zip(line_wave, sq_fluxes, sq_contfluxes):
+        diff = numpy.abs(sf - scf)
         diffs_list.append(diff)
-    min_diff = min(diffs_list)
-    min_idx = diffs_list.index(min_diff)
+        print 'Difference at ', lw, diff
+    '''
+    norm_flx = []
+    for lw, lf, cf in zip(line_wave, line_flux, flux_cont):
+        nf = numpy.abs(lf) / numpy.abs(cf)
+        norm_flx.append(nf)
+        print 'normalization at ', lw, nf, lf, cf
+    min_diff = min(norm_flx, key=lambda x:abs(x-1.0))
+    min_idx = norm_flx.index(min_diff)
     wav_min_diff = line_wave[min_idx] 
     if wav_min_diff < original_center:
         lolim = wav_min_diff
@@ -1269,7 +1282,8 @@ def find_EW(data_arr, cont_arr, lower, upper, do_errs=None):
         uplim = wav_min_diff
         lolim = uplim - original_width
     new_center = (lolim + uplim) / 2.0
-    #print 'ORIGINAL CENTER=', original_center, '   NEW CENTER OF THE LINE=', new_center
+    print 'ORIGINAL CENTER=', original_center, '   NEW CENTER OF THE LINE=', new_center
+    print 'limits:   ', lolim, uplim
     # now determine the equivalent width
     if do_errs != None:
         eqw, lolim, uplim , err_ew = EQW(data_arr, cont_arr, lolim, uplim, do_errs)
