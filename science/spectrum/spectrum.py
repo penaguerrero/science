@@ -1150,20 +1150,27 @@ def EQW(data_arr, cont_arr, lower, upper, do_errs=None):
     eqw = sum(difference) * dlambda * (-1)   # the -1 is because of the definition of EQW        
     if do_errs != None:
         errs_fluxes, errs_continuum = do_errs
-        err_diff = []
+        err_a = []
+        err_b = []
         for f, c, ef, ec in zip(flux, flux_cont, errs_fluxes, errs_continuum):
-            ed = (ec*ec)/(c*c) + (ef*ef)/(f*f)
-            #ed = (ec*ec)/(c*c) + (ef*ef)/(f*f) - 2*(ef*ef*ec*ec)/(f*c)   # Only if the errors are indeed correlated
-            #ed = (1/c * ef)**2 + (f/c * ec/c)**2 - 2*(ef*ef*ec*ec)/(f*c)
-            err_diff.append(ed)
-        tot_err_diff = sum(err_diff)
-        err_ew = dlambda * numpy.abs(eqw) * numpy.sqrt(tot_err_diff)
-        print 'lower, upper, ew, err_ew', lower, upper, eqw, err_ew
+            # Let  a = flux / flux_cont, then error in a is
+            ea = (ec*ec)/(c*c) + (ef*ef)/(f*f)
+            #ea = (ef/f)**2 + (ec/c)**2 - 2*(ef*ef*ec*ec)/(f*c)   # Only if the errors are indeed correlated
+            err_a.append(ea)
+            # Let  b = 1-a, then the error in b is
+            eb = ea*ea
+            err_b.append(eb)
+        abs_a = numpy.abs(sum(flux)/sum(flux_cont))
+        tot_err_a = abs_a * numpy.sqrt(sum(err_a))
+        tot_err_b = numpy.sqrt(sum(err_b))
+        tot_err_diff = tot_err_a*tot_err_a + tot_err_b*tot_err_b
+        err_ew = dlambda * numpy.sqrt(tot_err_diff)
+        #print 'lower_limit =', lower, '  upper_limit =', upper, '  ew =', eqw, '+-', err_ew
         return (eqw, lower, upper, err_ew)
     else:
         #final_width = upper - lower
         #print('center=', (upper+lower)/2.0,'  final_width = %f' % final_width, '    ew=', eqw)
-        print 'lower, upper, ew', lower, upper, eqw
+        #print 'lower_limit =', lower, '  upper_limit =', upper,'  ew =', eqw
         return (eqw, lower, upper)
 
 def EQW_iter(data_arr, cont_arr, line, guessed_width=3.0):
@@ -1271,7 +1278,7 @@ def find_EW(data_arr, cont_arr, lower, upper, do_errs=None):
     for lw, lf, cf in zip(line_wave, line_flux, flux_cont):
         nf = numpy.abs(lf) / numpy.abs(cf)
         norm_flx.append(nf)
-        print 'normalization at ', lw, nf, lf, cf
+        #print 'normalization at ', lw, nf, '  Flux=', lf, '  Continuum=', cf
     min_diff = min(norm_flx, key=lambda x:abs(x-1.0))
     min_idx = norm_flx.index(min_diff)
     wav_min_diff = line_wave[min_idx] 
@@ -1283,14 +1290,16 @@ def find_EW(data_arr, cont_arr, lower, upper, do_errs=None):
         lolim = uplim - original_width
     new_center = (lolim + uplim) / 2.0
     print 'ORIGINAL CENTER=', original_center, '   NEW CENTER OF THE LINE=', new_center
-    print 'limits:   ', lolim, uplim
+    #print 'limits:   ', lolim, uplim
     # now determine the equivalent width
     if do_errs != None:
         eqw, lolim, uplim , err_ew = EQW(data_arr, cont_arr, lolim, uplim, do_errs)
+        print 'lower_limit =', lower, '  upper_limit =', upper, '  ew =', eqw, '+-', err_ew
         return (eqw, lolim, uplim, err_ew)
     else:
         eqw, lolim, uplim = EQW(data_arr, cont_arr, lolim, uplim)
         #print('center=', new_center,'  final_width = %f' % uplim - lolim, '    ew=', eqw)
+        print 'lower_limit =', lower, '  upper_limit =', upper, '  ew =', eqw
         return (eqw, lolim, uplim)
     
 #### Full width half maximum 
