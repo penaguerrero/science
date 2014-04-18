@@ -135,8 +135,12 @@
 2344.21	Fe	2	no	NA	NA	nw
 2374.46	Fe	2	no	NA	NA	nw
 2382.76	Fe	2	no	NA	NA	nw
+2422.   Ne  4   yes total   NA  nw
+2425.   Ne  4   yes total   NA  nw
 2470.97	O	2	yes	total	NA	nw
 2471.09	O	2	yes	total	NA	nw
+2495.   K   5   yes total   NA  nw
+2515.   K   5   yes total   NA  nw
 2576.88	Mn	2	no	NA	NA	nw
 2586.65	Fe	2	no	NA	NA	nw
 2594.5	Mn	2	no	NA	NA	nw
@@ -145,8 +149,12 @@
 2796.35	Mg	2	no	NA	NA	nw
 2803.53	Mg	2	no	NA	NA	nw
 2852.96	Mg	1	no	NA	NA	nw
+2975.   Ne  5   yes total   NA  nw
 # optical and near IR taken from Peimbert (2003)
 3187.74	He	1	no	NA	3	no
+3342.   Ne  3   yes total   NA  no
+3346.   Ne  5   yes total   NA  no
+3426.   Ne  5   yes total   NA  no
 3447.59	He	1	no	NA	7	no
 #3478.97	He	1	no	NA	43	no
 3481.96	Ne	2	no	NA	6	no
@@ -226,6 +234,7 @@
 3970.07	H	1	no	NA	H7	no
 #3979.78	Fe	2	yes	total	F9	no
 #3979.93	Fe	2	yes	total	F8	no
+3996.   Ca  5   yes total   NA  no
 4004.38	0.0183	0.0249	no	NA	20	no
 #4008.3	Fe	3	yes	total	F4	no
 4009.26	He	1	no	NA	55	no
@@ -255,6 +264,7 @@
 4118.1	Ne	2	no	NA	54	no
 4119.22	O	2	no	NA	20	no
 4120.84	He	1	no	NA	16	no
+4123.   K   5   yes total   NA  no
 4124.78	Fe	2	yes	total	0.0228	no
 4132.8	O	2	no	NA	19	no
 4138.1	0.0394	0.0516	no	NA	12	no
@@ -268,7 +278,8 @@
 4153.3	O	2	no	NA	19	no
 4156.53	O	2	no	NA	19	no
 4157.45	0.0279	0.0364	no	NA	15	no
-4163.26	C	3?	no	NA	21	no
+4163.   K   5   yes total   NA  no
+#4163.26	C	3?	no	NA	21	no
 4168.97	He	1	no	NA	52	no
 4169.22	O	2	no	NA	19	no
 4185.45	O	2	no	NA	36	no
@@ -325,6 +336,7 @@
 4491.23	O	2	no	NA	86a	no
 4500.18	Ne	1	no	NA	0.005	no
 4509.61	Fe	2	yes	total	F6	no
+4511.   K   4   yes total   NA  no
 4520.72	0.0276	0.0314	no	NA	15	no
 4525.76	Ne	1	no	NA	0.016	no
 4527.01	0.0031	0.0036	no	NA	35	no
@@ -342,6 +354,7 @@
 4610.2	O	2	no	NA	92e	no
 4615.17	0.012	0.0132	no	NA	no	20
 4620.61	0.009	0.0099	no	NA	25	no
+4626.   Ar  5   yes total   NA  no
 4630.54	N	2	no	NA	5	no
 #4638.86	O	2	no	NA	1	no
 #4640.64	N	3	no	NA	2	no
@@ -409,7 +422,8 @@
 5200.26	N	1	yes	total	F1	no
 5261.62	Fe	2	yes	total	F19	no
 5270.4	Fe	3	yes	total	F1	no
-5308.73	0.004	0.0034	no	NA	35	no
+#5308.73	0.004	0.0034	no	NA	35	no
+5309.   Ca  5   yes total   NA  no
 5324.61	0.0092	0.0077	no	NA	25	no
 5325.2	0.0153	0.0129	no	NA	20	no
 5326.4	Ne	1	no	NA	0.023	no
@@ -429,6 +443,8 @@
 5978.93	S	3	no	NA	4	no
 5987.46	0.0202	0.0134	no	NA	20	no
 6046.4	O	1	no	NA	22	no
+6087.   Ca  5   yes total   NA  no
+6102.   K   4   yes total   NA  no
 6150.9	N	2	no	NA	36	no
 6151.43	C	2	no	NA	16.04	no
 6205.56	C	3	no	NA	198	no
@@ -438,6 +454,7 @@
 6347.09	S	3	no	NA	2	no	no
 6363.78	O	1	yes	total	F1	no
 6371.36	S	3	no	NA	2	no	no
+6435.   Ar  5   yes total   NA  no
 6548.03	N	2	yes	total	F1	no
 #6550.6	O	2	no	NA	0.0196	no
 #6556.06	O	2	no	NA	113	no
@@ -452,7 +469,9 @@
 6734.0000	C	2	no	NA	132	no
 6733.9	Cr	4	yes	total	0.0419	no
 6747.5	Cr	4	yes	total	0.0193	no
+6796.   K   4   yes total   NA  no
 7002.13	O	1	no	NA	21	no
+7006.   Ar  5   yes total   NA  no
 7065.25	He	1	no	NA	10	no
 7110.9	Cr	4	yes	total	0.0241	no
 7135.8	Ar	3	yes	total	F1	no
