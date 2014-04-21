@@ -800,7 +800,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             final_width = numpy.round(final_width, decimals=1)
             central_wavelength = float((uplim+lolim)/2.0)
             #print('center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew)
-            print 'center=', central_wavelength,'  Flux=',F, '  ew=', ew, '  from ', lower_wav, '  to ', upper_wav
+            print 'center=', central_wavelength,'  Flux=',F, '  ew=', ew, '  from ', lolim, '  to ', uplim
             width_list.append(final_width)
             central_wavelength_list.append(central_wavelength)
             continuum_list.append(C)
@@ -1232,16 +1232,16 @@ def EQW_iter(data_arr, cont_arr, line, guessed_width=3.0):
     #print('final_width = %f' % final_width)
     return (eqw, lolim, uplim)
 
-def find_EW(data_arr, cont_arr, lower, upper, do_errs=None):
+def find_EW(data_arr, cont_arr, low, upp, do_errs=None):
     '''
     This function recenters the line according to the max or min (emission or absorption) and then adjusts 
     according to the min difference between the flux and the continuum.
     low = closest point in the wavelength array to lower part of the predefined width of the line
     upp = closest point in the wavelength array to upper part of the predefined width of the line
     '''
-    lower = float(lower)
-    upper = float(upper)
-    original_width = upper - lower
+    lower = float(low) + 2.0
+    upper = float(upp) + 2.0
+    original_width = float(upp) - float(low)
     #print 'lower, upper, width', lower, upper, width
     # Determine if it is an absorption or emission line
     original_center = (upper + lower)/2.0
@@ -1249,7 +1249,6 @@ def find_EW(data_arr, cont_arr, lower, upper, do_errs=None):
     elements = 30
     line_wave, line_flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
     # just in case the continuum went negative, make it positive! This works for absorption and emission....  :)    
-    '''
     sq_fluxes = []
     for lf, cf in zip(line_flux, flux_cont):
         sq_fluxes.append(lf*lf)
@@ -1258,10 +1257,9 @@ def find_EW(data_arr, cont_arr, lower, upper, do_errs=None):
     recenter = line_wave[idx_line_peak]
     lower = recenter - (original_width/2.0)
     upper = recenter + (original_width/2.0)
-    print 'ORIGINAL CENTER=', original_center, '   recenter=',recenter, lower, upper
+    #print 'ORIGINAL CENTER=', original_center, '   1st recenter: i.e. peak at',recenter
     line_wave, line_flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
-    ''
-    print line_wave
+    '''
     sq_fluxes = []
     sq_contfluxes = []
     for lf, cf in zip(line_flux, flux_cont):
@@ -1274,6 +1272,7 @@ def find_EW(data_arr, cont_arr, lower, upper, do_errs=None):
         diffs_list.append(diff)
         print 'Difference at ', lw, diff
     '''
+    # Find out in the line array where is the point closest to the continuum to recenter again according to it
     norm_flx = []
     for lw, lf, cf in zip(line_wave, line_flux, flux_cont):
         nf = numpy.abs(lf) / numpy.abs(cf)
@@ -1289,17 +1288,17 @@ def find_EW(data_arr, cont_arr, lower, upper, do_errs=None):
         uplim = wav_min_diff
         lolim = uplim - original_width
     new_center = (lolim + uplim) / 2.0
-    print 'ORIGINAL CENTER=', original_center, '   NEW CENTER OF THE LINE=', new_center
+    #print 'ORIGINAL CENTER=', original_center, '   NEW CENTER OF THE LINE=', new_center
     #print 'limits:   ', lolim, uplim
     # now determine the equivalent width
     if do_errs != None:
         eqw, lolim, uplim , err_ew = EQW(data_arr, cont_arr, lolim, uplim, do_errs)
-        print 'lower_limit =', lower, '  upper_limit =', upper, '  ew =', eqw, '+-', err_ew
+        #print 'lower_limit =', lolim, '  upper_limit =', uplim, '  ew =', eqw, '+-', err_ew
         return (eqw, lolim, uplim, err_ew)
     else:
         eqw, lolim, uplim = EQW(data_arr, cont_arr, lolim, uplim)
         #print('center=', new_center,'  final_width = %f' % uplim - lolim, '    ew=', eqw)
-        print 'lower_limit =', lower, '  upper_limit =', upper, '  ew =', eqw
+        #print 'lower_limit =', lolim, '  upper_limit =', uplim, '  ew =', eqw
         return (eqw, lolim, uplim)
     
 #### Full width half maximum 
