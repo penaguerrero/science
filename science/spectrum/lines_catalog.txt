@@ -84,15 +84,15 @@
 1717.9	Fe	4	no	NA	NA	nw
 1718.55	N	4	no	NA	NA	nw
 1741.55	Ni	2	no	NA	NA	nw
-1748.0000	N	3	yes	semi	NA	nw
-1750.0000	N	3	yes	semi	NA	nw
-1754.0000	N	3	yes	semi	NA	nw
+1749.0000	N	3	yes	semi	NA	nw
+1752.0000	N	3	yes	semi	NA	nw
+#1754.0000	N	3	yes	semi	NA	nw
 1751.91	Ni	2	no	NA	NA	nw
 1808.01	Si	2	no	NA	NA	nw
 1845.52	Si	1	no	NA	NA	nw
 1854.72	Al	3	no	NA	NA	nw
 1862.79	Al	3	no	NA	NA	nw
-1883.0000	Si	3	yes	semi	NA	nw
+1883.00	Si	3	yes	semi	NA	nw
 1892.03	Si	3	yes	semi	NA	nw
 1901.77	Fe	2	no	NA	NA	nw
 1906.68	C	3	yes	semi	NA	nw
@@ -128,11 +128,14 @@
 2260.78	Fe	2	no	NA	NA	nw
 2297.58	C	3	no	NA	NA	nw
 2321.66	O	3	yes	total	NA	nw
-2324.0000	C	2	yes	total	NA	nw
-2326.0000	C	2	yes	semi	NA	nw
-2329.0000	C	2	yes	total	NA	nw
+#2324.0000	C	2	yes	total	NA	nw
+#2326.0000	C	2	yes	semi	NA	nw
+2325.0000	C	2	yes	semi	NA	nw
+2328.0000	C	2	yes	semi	NA	nw
 2331.0000	O	3	yes	total	NA	nw
+2335.	Si	2	yes	total	NA	nw
 2344.21	Fe	2	no	NA	NA	nw
+2345.	Si	2	yes	total	NA	nw
 2374.46	Fe	2	no	NA	NA	nw
 2382.76	Fe	2	no	NA	NA	nw
 2418.   Mg  5   yes total   NA  nw
@@ -148,6 +151,8 @@
 2594.5	Mn	2	no	NA	NA	nw
 2600.17	Fe	2	no	NA	NA	nw
 2606.46	Mn	2	no	NA	NA	nw
+2661.	Al	2	yes total	NA	nw
+2670.	Al	2	yes total	NA	nw
 2783.   Mg  5   yes total   NA  nw
 2796.35	Mg	2	no	NA	NA	nw
 2803.53	Mg	2	no	NA	NA	nw
@@ -460,9 +465,11 @@
 6151.43	C	2	no	NA	16.04	no
 6205.56	C	3	no	NA	198	no
 6205.77	Ne	1	no	NA	0.0081	no
+6223.	K	5	yes	total	F1	no
 6300.3	O	1	yes	total	F1	no
 6312.1	S	3	yes	total	F3	no
 6347.09	S	3	no	NA	2	no	no
+6349.	K	5	yes	total	F1	no
 6363.78	O	1	yes	total	F1	no
 6371.36	S	3	no	NA	2	no	no
 6435.   Ar  5   yes total   NA  no
