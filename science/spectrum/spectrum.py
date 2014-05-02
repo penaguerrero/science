@@ -220,7 +220,7 @@ def clip_flux_using_modes(object_spec, window, threshold_fraction):
     clipd_arr = numpy.array([object_spec[0], clipd_fluxes_list])
     return clipd_arr
 
-def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, order=None, plot=True, z_correct=True, normalize=True):
+def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, order=None, plot=True, z_correct=True, normalize=True, nullfirst150=True):
     '''
     This function shifts the object's data to the rest frame (z=0). The function then fits a 
     continuum to the entire spectrum, omitting the lines windows (it interpolates 
@@ -234,6 +234,8 @@ def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, o
                           of the flux band in which to allow interpolation of fluxes
     # window_width = the size of the spectrum window to be analyzed.
         * The default window size: 150 A but it can be set to take into account the whole spectrum.
+    # nullfirst150 = do you want NOT to consider the first 150 Angstroms? Default=True, meaning no, 
+                     do not take into account.
     FUNCTION RETURNS:
     # 2D numpy array of redshift-corrected wavenegths and fluxes.
     # 2D continuum numpy array of wavenegths and fluxes.
@@ -250,6 +252,16 @@ def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, o
     corr_wf = numpy.array([w_corr, object_spectra[1]])
     wf, std_arr, avg_arr = get_spec_sigclip(corr_wf, window, sigmas_away)
     print 'numpy.shape(wf), numpy.shape(avg_arr)', numpy.shape(wf), numpy.shape(avg_arr)
+    # Do you want to NOT take into account the first 150 angstroms and use the next window as average flux
+    # but only if the window is small enough
+    if window < 150.0:
+        if nullfirst150:
+            for i in range(len(avg_arr[1])):
+                wl, idx = find_nearest(avg_arr[0], avg_arr[0][0]+150.0)
+                avgfluxfirst150 = avg_arr[1][idx]
+                if avg_arr[0][i] < wl:
+                    avg_arr[1][i] = avgfluxfirst150
+                print avg_arr[0][i], avg_arr[1][i]
     if order == None:
         fitted_continuum, nth, err_fit = get_best_polyfit(avg_arr, window)
         print 'order of best fit polynomial', nth
