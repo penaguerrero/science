@@ -473,12 +473,12 @@
 6363.78	O	1	yes	total	F1	no
 6371.36	S	3	no	NA	2	no	no
 6435.   Ar  5   yes total   NA  no
-6548.03	N	2	yes	total	F1	no
+6548.03	N	2	yes	total	F1	medium
 #6550.6	O	2	no	NA	0.0196	no
 #6556.06	O	2	no	NA	113	no
 6562.82	H	1	no	NA	H3	Halpha
 #6578.05	C	2	no	NA	2	no
-6583.41	N	2	yes	total	F1	no
+6583.41	N	2	yes	total	F1	medium
 6591.06	0.0255	0.0144	no	NA	20	no
 6622.05	C	2	no	NA	0.0142	no
 6678.15	He	1	no	NA	46	weak
