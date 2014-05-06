@@ -801,7 +801,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             line_width = lines_catalog[7][i]
             lower_wav = central_wavelength - (line_width/2)
             upper_wav = central_wavelength + (line_width/2)
-            #print 'looking for ', lines_catalog[use_wavs][i]
+            print 'looking for ', lines_catalog[use_wavs][i]
             if do_errs != None:
                 F, C, err_F, ew, lolim, uplim, err_ew = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=err_lists)
                 errs_net_fluxes.append(err_F)
@@ -812,7 +812,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             final_width = numpy.round(final_width, decimals=1)
             central_wavelength = float((uplim+lolim)/2.0)
             #print('center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew)
-            #print 'center=', central_wavelength,'  Flux=',F, '  ew=', ew, '  from ', lolim, '  to ', uplim
+            print 'center=', central_wavelength,'  Flux=',F, '  ew=', ew, '  from ', lolim, '  to ', uplim
             width_list.append(final_width)
             central_wavelength_list.append(central_wavelength)
             continuum_list.append(C)
@@ -1146,7 +1146,7 @@ def EQW(data_arr, cont_arr, lower, upper, do_errs=None):
     #_, flux_cont = selection(cont_arr[0], cont_arr[1], lower, upper)
     
     # Interpolate so that the flux selection array has 10 elements
-    elements = 10
+    elements = 100
     wavelength, flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
     # Finding the average step for the integral
     N = len(wavelength)
