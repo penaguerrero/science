@@ -944,19 +944,16 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=None
     F = ew * C #* (-1)   # with the actual equivalent width definition
     #print (lower_wav+upper_wav)/2.0, ' F=', F, 'ew=', ew, '  from ', lower_wav, '  to ', upper_wav
     if do_errs != None:
-        '''
         if lower_wav < 2000.:
-            n=0 #this gets the percentage error of the continuum
+            n = 0 #this gets the percentage error of the continuum
         elif (lower_wav >= 2000) and (lower_wav < 5000.):
-            n = len(do_errs[1])/2
+            n = int(len(do_errs[1])/2)
         elif lower_wav >= 5000.:
             n = -1
         err_perc = do_errs[1][n]/continuum[1][n]  #this gets the percentage error of the continuum
         errC = C * err_perc
-        err_F = numpy.abs(F) * numpy.sqrt( (err_ew/ew)**2 + (errC/C)**2 - 2*((err_ew*errC)**2/(ew*C)) )
-        print 'F, err_F, C, errC, err_perc', F, err_F, C, errC, err_perc
-        '''
-        err_F = 0.0  # THIS IS ONLY TEMPORARY!!!
+        err_F =  numpy.sqrt( F**2*( (err_ew/ew)**2 + (errC/C)**2 - 2*((err_ew*errC)**2/(ew*C)) ))
+        #print 'F, err_F, C, errC, err_perc', F, err_F, C, errC, err_perc
         return F, C, err_F, ew, lower_wav, upper_wav, err_ew
     else:
         return F, C, ew, lower_wav, upper_wav
@@ -1161,21 +1158,17 @@ def EQW(data_arr, cont_arr, lower, upper, do_errs=None):
     difference = 1 - (flux / flux_cont)
     eqw = sum(difference) * dlambda * (-1)   # the -1 is because of the definition of EQW        
     if do_errs != None:
-        errs_fluxes, errs_continuum = do_errs
+        errs_fluxes, errs_continuum = do_errs        
         err_a = []
         err_b = []
         for f, c, ef, ec in zip(flux, flux_cont, errs_fluxes, errs_continuum):
             # Let  a = flux / flux_cont, then error in a is
-            ea = (ec*ec)/(c*c) + (ef*ef)/(f*f)
-            #ea = (ef/f)**2 + (ec/c)**2 - 2*(ef*ef*ec*ec)/(f*c)   # Only if the errors are indeed correlated
+            ea = f/c * numpy.sqrt((ec/c)**2 + (ef/f)**2)
             err_a.append(ea)
-            # Let  b = 1-a, then the error in b is
+            # Let  b = 1-a, then the error**2 in b is
             eb = ea*ea
             err_b.append(eb)
-        abs_a = numpy.abs(sum(flux)/sum(flux_cont))
-        tot_err_a = abs_a * numpy.sqrt(sum(err_a))
-        tot_err_b = numpy.sqrt(sum(err_b))
-        tot_err_diff = tot_err_a*tot_err_a + tot_err_b*tot_err_b
+        tot_err_diff = numpy.sqrt(sum(err_b))
         err_ew = dlambda * numpy.sqrt(tot_err_diff)
         #print 'lower_limit =', lower, '  upper_limit =', upper, '  ew =', eqw, '+-', err_ew
         return (eqw, lower, upper, err_ew)
