@@ -801,7 +801,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             line_width = lines_catalog[7][i]
             lower_wav = central_wavelength - (line_width/2)
             upper_wav = central_wavelength + (line_width/2)
-            print 'looking for ', lines_catalog[use_wavs][i]
+            print 'looking for ', lines_catalog[use_wavs][i] #***
             if do_errs != None:
                 F, C, err_F, ew, lolim, uplim, err_ew = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=err_lists)
                 errs_net_fluxes.append(err_F)
@@ -812,7 +812,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             final_width = numpy.round(final_width, decimals=1)
             central_wavelength = float((uplim+lolim)/2.0)
             print('center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew)
-            #print 'center=', central_wavelength,'  Flux=',F, '  ew=', ew, '  from ', lolim, '  to ', uplim
+            print 'center=', central_wavelength,'  Flux=',F, '  ew=', ew, '  from ', lolim, '  to ', uplim
             width_list.append(final_width)
             central_wavelength_list.append(central_wavelength)
             continuum_list.append(C)
@@ -1247,7 +1247,7 @@ def find_EW(data_arr, cont_arr, low, upp, do_errs=None):
     lower = float(low) + 2.0
     upper = float(upp) + 2.0
     original_width = float(upp) - float(low)
-    #print 'lower, upper, width', lower, upper, width
+    #print 'ORIGINALS:  lower =', lower, ' upper =', upper, '   width =', original_width
     # Determine if it is an absorption or emission line
     original_center = (upper + lower)/2.0
     # Recenter the line according to the max in the sqared fluxes
@@ -1259,10 +1259,12 @@ def find_EW(data_arr, cont_arr, low, upp, do_errs=None):
         sq_fluxes.append(lf*lf)
     line_peak = max(sq_fluxes)
     idx_line_peak = sq_fluxes.index(line_peak)
-    recenter = line_wave[idx_line_peak]
-    lower = recenter - (original_width/2.0)
-    upper = recenter + (original_width/2.0)
-    #print 'ORIGINAL CENTER=', original_center, '   1st recenter: i.e. peak at',recenter
+    recenter1 = line_wave[idx_line_peak]
+    lower = recenter1 - (original_width/2.0)
+    upper = recenter1 + (original_width/2.0)
+    print 'ORIGINAL CENTER=', original_center, '   1st recenter: i.e. peak at', recenter1
+    print 'lower = ', lower, '   upper = ', upper
+    # with the new lower and upper points, redetermine a line array
     line_wave, line_flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
     '''
     sq_fluxes = []
@@ -1286,14 +1288,15 @@ def find_EW(data_arr, cont_arr, low, upp, do_errs=None):
     min_diff = min(norm_flx, key=lambda x:abs(x-1.0))
     min_idx = norm_flx.index(min_diff)
     wav_min_diff = line_wave[min_idx] 
-    if wav_min_diff < original_center:
+    print 'the continuum crossing point is at:', wav_min_diff
+    if wav_min_diff < recenter1:
         lolim = wav_min_diff
-        uplim = lolim + original_width
+        uplim = wav_min_diff + original_width
     else:
         uplim = wav_min_diff
-        lolim = uplim - original_width
+        lolim = wav_min_diff - original_width
     new_center = (lolim + uplim) / 2.0
-    #print 'ORIGINAL CENTER=', original_center, '   NEW CENTER OF THE LINE=', new_center
+    print 'ORIGINAL CENTER=', original_center, '   NEW CENTER OF THE LINE=', new_center
     #print 'limits:   ', lolim, uplim
     # now determine the equivalent width
     if do_errs != None:
