@@ -9,6 +9,7 @@ from scipy import ndimage
 from scipy import optimize
 from pprint import pprint
 from scipy import stats
+import copy
 from matplotlib import pyplot
 #from uncertainties import unumpy
 #from uncertainties import ufloat
@@ -1237,24 +1238,18 @@ def EQW_iter(data_arr, cont_arr, line, guessed_width=3.0):
     #print('final_width = %f' % final_width)
     return (eqw, lolim, uplim)
 
-def find_EW(data_arr, cont_arr, low, upp, do_errs=None):
-    '''
-    This function recenters the line according to the max or min (emission or absorption) and then adjusts 
-    according to the min difference between the flux and the continuum.
-    low = closest point in the wavelength array to lower part of the predefined width of the line
-    upp = closest point in the wavelength array to upper part of the predefined width of the line
-    '''
-    lower = float(low) + 2.0
-    upper = float(upp) + 2.0
-    original_width = float(upp) - float(low)
-    #print 'ORIGINALS:  lower =', lower, ' upper =', upper, '   width =', original_width
-    # Determine if it is an absorption or emission line
-    original_center = (upper + lower)/2.0
-    # Recenter the line according to the max in the sqared fluxes
-    elements = 30
-    line_wave, line_flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
-    # WAIT! Before recentering to the max in the line array, make sure that the original center is a not peak,
-    # this is just in case there is a close peak that is higher/lower than the original center.
+def recenter(line_wave, line_flux, original_width):
+    sq_fluxes = []
+    for lf in line_flux:
+        sq_fluxes.append(lf*lf)
+    line_peak = max(sq_fluxes)
+    idx_line_peak = sq_fluxes.index(line_peak)
+    recenter = line_wave[idx_line_peak]
+    lower = recenter - (original_width/2.0)
+    upper = recenter + (original_width/2.0)
+    return recenter, lower, upper
+
+def determine_if_is_peak(line_wave, line_flux, original_center):
     _, originalcenter_idx =  find_nearest(line_wave, original_center)
     originalcenter_flx = line_flux[originalcenter_idx]
     _, left_originalcenter_idx =  find_nearest(line_wave, original_center-1.5)
@@ -1280,56 +1275,118 @@ def find_EW(data_arr, cont_arr, low, upp, do_errs=None):
             right_is_lessthan_original_center = True
     if left_is_lessthan_original_center and right_is_lessthan_original_center:
         originalcenter_is_peak = True
-    if originalcenter_is_peak:
-        uplim = upper
-        lolim = lower
+    return originalcenter_is_peak
+
+def find_first2peaks(line_wave, line_flux, original_width):
+    line_wave_copy = copy.deepcopy(line_wave)
+    line_flux_copy = copy.deepcopy(line_flux)
+    peak1, _, _ = recenter(line_wave_copy, line_flux_copy, original_width)
+    peak1_is_peak = determine_if_is_peak(line_wave, line_flux, peak1)
+    _, idx = find_nearest(line_wave_copy, peak1)
+    line_flux_copy[idx] = 0.0
+    peak2, _, _ = recenter(line_wave_copy, line_flux_copy, original_width)
+    return peak1, peak2   # these are the 2 WAVELENGTHS ath which there is a peak flux
+
+def find_EW(data_arr, cont_arr, low, upp, do_errs=None):
+    '''
+    This function recenters the line according to the max or min (emission or absorption) and then adjusts 
+    according to the min difference between the flux and the continuum.
+    low = closest point in the wavelength array to lower part of the predefined width of the line
+    upp = closest point in the wavelength array to upper part of the predefined width of the line
+    '''
+    lower = float(low) + 2.0
+    upper = float(upp) + 2.0
+    original_width = float(upp) - float(low)
+    #print 'ORIGINALS:  lower =', lower, ' upper =', upper, '   width =', original_width
+    # Recenter the line according to the max in the sqared fluxes
+    elements = 30
+    line_wave, line_flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
+    # WAIT! Before recentering to the max/min in the line array, make sure that the original center is a not peak or closer to it,
+    # this part is just in case there is a close peak that is higher/lower than the original center.
+    # Frirst normalize the spectrum
+    norm_flx = []
+    for lw, lf, cf in zip(line_wave, line_flux, flux_cont):
+        nf = numpy.abs(lf) / numpy.abs(cf)
+        norm_flx.append(nf)
+        #print 'normalization at ', lw, nf, '  Flux=', lf, '  Continuum=', cf
+    # Determine if we have an emission or absorption at the original center
+    original_center = (upper + lower)/2.0
+    original_center_flx = numpy.interp(original_center, line_wave, norm_flx)
+    line_is_emission = False
+    if original_center_flx > 1.0:
+        line_is_emission = True
+        print' line is EMISSION'
     else:
-        # Proceed with the recentering but just in case the continuum went negative, make it positive! 
-        # This works for absorption and emission....  :)    
-        sq_fluxes = []
-        for lf, cf in zip(line_flux, flux_cont):
-            sq_fluxes.append(lf*lf)
-        line_peak = max(sq_fluxes)
-        idx_line_peak = sq_fluxes.index(line_peak)
-        recenter1 = line_wave[idx_line_peak]
-        lower = recenter1 - (original_width/2.0)
-        upper = recenter1 + (original_width/2.0)
-        print 'ORIGINAL CENTER=', original_center, '   1st recenter: i.e. peak at', recenter1
-        #print 'lower = ', lower, '   upper = ', upper
-        # with the new lower and upper points, redetermine a line array
-        line_wave, line_flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
-        '''
-        sq_fluxes = []
-        sq_contfluxes = []
-        for lf, cf in zip(line_flux, flux_cont):
-            sq_fluxes.append(lf*lf)
-            sq_contfluxes.append(cf*cf)
-        # Find out in the line array where is the point closest to the continuum to recenter the line according to it
-        diffs_list = []
-        for lw, sf, scf in zip(line_wave, sq_fluxes, sq_contfluxes):
-            diff = numpy.abs(sf - scf)
-            diffs_list.append(diff)
-            print 'Difference at ', lw, diff
-        '''
-        # Find out in the line array where is the point closest to the continuum to recenter again according to it
-        norm_flx = []
-        for lw, lf, cf in zip(line_wave, line_flux, flux_cont):
-            nf = numpy.abs(lf) / numpy.abs(cf)
-            norm_flx.append(nf)
-            #print 'normalization at ', lw, nf, '  Flux=', lf, '  Continuum=', cf
-        min_diff = min(norm_flx, key=lambda x:abs(x-1.0))
-        min_idx = norm_flx.index(min_diff)
-        wav_min_diff = line_wave[min_idx] 
-        print 'the continuum crossing point is at:', wav_min_diff
-        if wav_min_diff < recenter1:
-            lolim = wav_min_diff
-            uplim = wav_min_diff + original_width
+        print' line is ABSORPTION'
+    # According to the appropriate type of line, find the peak
+    positive_fluxes = []
+    negative_fluxes = []
+    for f in norm_flx:
+        if f >= 1.0:
+            positive_fluxes.append(f)
         else:
-            uplim = wav_min_diff
-            lolim = wav_min_diff - original_width
-        new_center = (lolim + uplim) / 2.0
-        print 'ORIGINAL CENTER=', original_center, '   NEW CENTER OF THE LINE=', new_center
-        print 'limits:   ', lolim, uplim
+            negative_fluxes.append(f)
+    print 'lengths of positive_fluxes and negative_fluxes', len(positive_fluxes), len(negative_fluxes)
+    if line_is_emission:
+        peak_flx = max(positive_fluxes)
+    else:
+        peak_flx = min(negative_fluxes)
+    idx_peak = norm_flx.index(peak_flx)
+    recenter1 = line_wave[idx_peak]
+    print 'ORIGINAL CENTER=', original_center, '   1st recenter: ', recenter1
+    # Now, determine recenter2: this is the overall max/min, regardless if it is absorption or emission
+    # Just in case the continuum went negative, make it positive! 
+    # This works for absorption and emission....  :)    
+    sq_fluxes = []
+    for lf in line_flux:
+        sq_fluxes.append(lf*lf)
+    line_peak = max(sq_fluxes)
+    idx_line_peak = sq_fluxes.index(line_peak)
+    recenter2 = line_wave[idx_line_peak]
+    print 'ORIGINAL CENTER=', original_center, '   2nd recenter: ', recenter2
+    # Determine which recenter is closer to the original center
+    diff_recenter1 = numpy.abs( recenter1 - original_center )
+    diff_recenter2 = numpy.abs( recenter2 - original_center )
+    if diff_recenter1 < diff_recenter2:       #  1st recenter closer to original center
+        peak_wav = recenter1
+    elif diff_recenter1 >= diff_recenter2:     #  2nd recenter closer to original center
+        peak_wav = recenter2
+    lower = peak_wav - (original_width/2.0)
+    upper = peak_wav + (original_width/2.0)
+    # with the new lower and upper points, redetermine a line array
+    line_wave, line_flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
+    '''
+    sq_fluxes = []
+    sq_contfluxes = []
+    for lf, cf in zip(line_flux, flux_cont):
+        sq_fluxes.append(lf*lf)
+        sq_contfluxes.append(cf*cf)
+    # Find out in the line array where is the point closest to the continuum to recenter the line according to it
+    diffs_list = []
+    for lw, sf, scf in zip(line_wave, sq_fluxes, sq_contfluxes):
+        diff = numpy.abs(sf - scf)
+        diffs_list.append(diff)
+        print 'Difference at ', lw, diff
+    '''
+    # Find out in the line array where is the point closest to the continuum to recenter again according to it
+    norm_flx = []
+    for lw, lf, cf in zip(line_wave, line_flux, flux_cont):
+        nf = numpy.abs(lf) / numpy.abs(cf)
+        norm_flx.append(nf)
+        #print 'normalization at ', lw, nf, '  Flux=', lf, '  Continuum=', cf
+    min_diff = min(norm_flx, key=lambda x:abs(x-1.0))
+    min_idx = norm_flx.index(min_diff)
+    wav_min_diff = line_wave[min_idx] 
+    print 'the continuum crossing point is at:', wav_min_diff
+    if wav_min_diff < recenter1:
+        lolim = wav_min_diff
+        uplim = wav_min_diff + original_width
+    else:
+        uplim = wav_min_diff
+        lolim = wav_min_diff - original_width
+    new_center = (lolim + uplim) / 2.0
+    print 'ORIGINAL CENTER=', original_center, '   NEW CENTER OF THE LINE=', new_center
+    print 'limits:   ', lolim, uplim
     # Determine the equivalent width
     if do_errs != None:
         eqw, lolim, uplim , err_ew = EQW(data_arr, cont_arr, lolim, uplim, do_errs)
@@ -1340,6 +1397,7 @@ def find_EW(data_arr, cont_arr, low, upp, do_errs=None):
         #print('center=', new_center,'  final_width = %f' % uplim - lolim, '    ew=', eqw)
         #print 'lower_limit =', lolim, '  upper_limit =', uplim, '  ew =', eqw
         return (eqw, lolim, uplim)
+    
     
 #### Full width half maximum 
 def FWHM(sig):
