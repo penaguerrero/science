@@ -375,10 +375,10 @@
 #4638.86	O	2	no	NA	1	no
 #4640.64	N	3	no	NA	2	no
 #4641.81	O	2	no	NA	1	no
-4640.0000	O	2	no	NA	1	nw  no
+4640.0000	O	2	no	NA	1   no
 #4649.13	O	2	no	NA	1	no
 #4650.84	O	2	no	NA	1	no
-4650.0000	O	2	no	NA	1	nw  no
+4650.0000	O	2	no	NA	1   no
 #4656.39	Ne	1	no	NA	0.0447	no
 4658.1	Fe	3	yes	total	F3	no
 4661.63	O	2	no	NA	1	no
