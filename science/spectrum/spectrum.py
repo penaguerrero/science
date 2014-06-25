@@ -793,22 +793,24 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
         # err_lists contains err_fluxes, err_contfl 
     for i in range(len(lines_catalog[0])):
         # find the line in the catalog that is closest to a 
-        nearest2line = find_nearest_within(object_spectra[0], lines_catalog[use_wavs][i], 10.)
+        line_looked_for = lines_catalog[use_wavs][i]
+        nearest2line = find_nearest_within(object_spectra[0], line_looked_for, 10.)
         if nearest2line > 0.0:  
-            catalog_wavs_found.append(lines_catalog[use_wavs][i])
+            catalog_wavs_found.append(line_looked_for)
             # If the line is in the object spectra, measure the intensity and equivalent width
             # according to the strength of the line
             central_wavelength = object_spectra[0][(object_spectra[0] == nearest2line)]
             line_width = lines_catalog[7][i]
             lower_wav = central_wavelength - (line_width/2)
             upper_wav = central_wavelength + (line_width/2)
-            print 'looking for ', lines_catalog[use_wavs][i] #***
+            print '\n Looking for ',  line_looked_for #***
+            print 'This is the closest wavelength in the data to the target line: ', nearest2line
             if do_errs != None:
-                F, C, err_F, ew, lolim, uplim, err_ew = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=err_lists)
+                F, C, err_F, ew, lolim, uplim, err_ew = get_net_fluxes(object_spectra, continuum, line_looked_for, lower_wav, upper_wav, do_errs=err_lists)
                 errs_net_fluxes.append(err_F)
                 errs_ews.append(err_ew)
             else:
-                F, C, ew, lolim, uplim = get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav)   
+                F, C, ew, lolim, uplim = get_net_fluxes(object_spectra, continuum, line_looked_for, lower_wav, upper_wav)   
             final_width = float(uplim - lolim)
             final_width = numpy.round(final_width, decimals=1)
             central_wavelength = float((uplim+lolim)/2.0)
@@ -910,13 +912,14 @@ def get_lineinfo_uncertainties(object_spectra, continuum, Halpha_width, faintObj
         err_ews.append(numpy.abs(e_ew))
     return err_fluxes, err_continuum, err_ews
 
-def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=None):
+def get_net_fluxes(object_spectra, continuum, line_looked_for, lower_wav, upper_wav, do_errs=None):
     '''
     This function finds the integrated flux of the line given by the lower and upper
     wavelengths, along with the continuum value, and the equivalent width.
     REQUIREMENTS:
     # object_spectra = the 2D array of wavelength and flux
     # continuum = the 2D array of wavelength and flux for the continuum
+    # line_looked_for = the target line that we want to measure 
     # lower_wav, upper_wav = limits of integration
     FUNCTION RETURNS:
     # the net flux and corresponding continuum of the integration between lower and upper wavelengths
@@ -935,11 +938,11 @@ def get_net_fluxes(object_spectra, continuum, lower_wav, upper_wav, do_errs=None
         #print 'do_errs != None'
         #ew, lower_wav, upper_wav, err_ew = EQW(object_spectra, continuum, lower_wav, upper_wav, do_errs)
         #ew = numpy.squeeze(ew)
-        ew, lower_wav, upper_wav, err_ew = find_EW(object_spectra, continuum, lower_wav, upper_wav, do_errs)
+        ew, lower_wav, upper_wav, err_ew = find_EW(object_spectra, continuum, line_looked_for, lower_wav, upper_wav, do_errs)
     else:
         #ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)        
         # determine equivalent width by finding the max or the min of the line
-        ew, lower_wav, upper_wav = find_EW(object_spectra, continuum, lower_wav, upper_wav)
+        ew, lower_wav, upper_wav = find_EW(object_spectra, continuum, line_looked_for, lower_wav, upper_wav)
         #print 'I USED THE function that U want'
     ew = float(ew)
     F = ew * C #* (-1)   # with the actual equivalent width definition
@@ -1287,20 +1290,37 @@ def find_first2peaks(line_wave, line_flux, original_width):
     peak2, _, _ = recenter(line_wave_copy, line_flux_copy, original_width)
     return peak1, peak2   # these are the 2 WAVELENGTHS ath which there is a peak flux
 
-def find_EW(data_arr, cont_arr, low, upp, do_errs=None):
+def find_EW(data_arr, cont_arr, line_looked_for, low, upp, do_errs=None):
     '''
     This function recenters the line according to the max or min (emission or absorption) and then adjusts 
     according to the min difference between the flux and the continuum.
+    # line_looked_for = the target line that we want to measure
     low = closest point in the wavelength array to lower part of the predefined width of the line
     upp = closest point in the wavelength array to upper part of the predefined width of the line
     '''
     lower = float(low) + 2.0
     upper = float(upp) + 2.0
     original_width = float(upp) - float(low)
+    original_center = (upper + lower)/2.0
+    #print 'ORIGINAL CENTER=', original_center
     #print 'ORIGINALS:  lower =', lower, ' upper =', upper, '   width =', original_width
     # Recenter the line according to the max in the sqared fluxes
     elements = 30
     line_wave, line_flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
+    # Determine if we have an emission or absorption at the closest point to the target line
+    print numpy.shape(data_arr)
+    nearest2target_line, _ = find_nearest(data_arr[0], line_looked_for)
+    print 'Nearest point to the target line =', nearest2target_line
+    for w in line_wave:
+        print w
+    nearest2target_line_flx = numpy.interp(nearest2target_line, line_wave, line_flux)
+    nearest2target_line_cont = numpy.interp(nearest2target_line, line_wave, flux_cont)
+    line_is_emission = False
+    if nearest2target_line_flx >= nearest2target_line_cont:
+        line_is_emission = True
+        print' line is EMISSION'
+    else:
+        print' line is ABSORPTION'
     # WAIT! Before recentering to the max/min in the line array, make sure that the original center is a not peak or closer to it,
     # this part is just in case there is a close peak that is higher/lower than the original center.
     # Frirst normalize the spectrum
@@ -1309,17 +1329,6 @@ def find_EW(data_arr, cont_arr, low, upp, do_errs=None):
         nf = numpy.abs(lf) / numpy.abs(cf)
         norm_flx.append(nf)
         #print 'normalization at ', lw, nf, '  Flux=', lf, '  Continuum=', cf
-    # Determine if we have an emission or absorption at the original center
-    original_center = (upper + lower)/2.0
-    print 'ORIGINAL CENTER=', original_center
-    original_center_flx = numpy.interp(original_center, line_wave, line_flux)
-    original_center_cont = numpy.interp(original_center, line_wave, flux_cont)
-    line_is_emission = False
-    if original_center_flx >= original_center_cont:
-        line_is_emission = True
-        print' line is EMISSION'
-    else:
-        print' line is ABSORPTION'
     # According to the appropriate type of line, find the peak
     positive_fluxes = []
     negative_fluxes = []
