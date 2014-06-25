@@ -1311,9 +1311,11 @@ def find_EW(data_arr, cont_arr, low, upp, do_errs=None):
         #print 'normalization at ', lw, nf, '  Flux=', lf, '  Continuum=', cf
     # Determine if we have an emission or absorption at the original center
     original_center = (upper + lower)/2.0
-    original_center_flx = numpy.interp(original_center, line_wave, norm_flx)
+    print 'ORIGINAL CENTER=', original_center
+    original_center_flx = numpy.interp(original_center, line_wave, line_flux)
+    original_center_cont = numpy.interp(original_center, line_wave, flux_cont)
     line_is_emission = False
-    if original_center_flx > 1.0:
+    if original_center_flx >= original_center_cont:
         line_is_emission = True
         print' line is EMISSION'
     else:
@@ -1333,7 +1335,7 @@ def find_EW(data_arr, cont_arr, low, upp, do_errs=None):
         peak_flx = min(negative_fluxes)
     idx_peak = norm_flx.index(peak_flx)
     recenter1 = line_wave[idx_peak]
-    print 'ORIGINAL CENTER=', original_center, '   1st recenter: ', recenter1
+    print '   1st recenter: ', recenter1
     # Now, determine recenter2: this is the overall max/min, regardless if it is absorption or emission
     # Just in case the continuum went negative, make it positive! 
     # This works for absorption and emission....  :)    
@@ -1343,7 +1345,7 @@ def find_EW(data_arr, cont_arr, low, upp, do_errs=None):
     line_peak = max(sq_fluxes)
     idx_line_peak = sq_fluxes.index(line_peak)
     recenter2 = line_wave[idx_line_peak]
-    print 'ORIGINAL CENTER=', original_center, '   2nd recenter: ', recenter2
+    print '   2nd recenter: ', recenter2
     # Determine which recenter is closer to the original center
     diff_recenter1 = numpy.abs( recenter1 - original_center )
     diff_recenter2 = numpy.abs( recenter2 - original_center )
