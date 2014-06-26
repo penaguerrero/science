@@ -806,7 +806,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             print '\n Looking for ',  line_looked_for #***
             print 'This is the closest wavelength in the data to the target line: ', nearest2line
             if do_errs != None:
-                F, C, err_F, ew, lolim, uplim, err_ew = get_net_fluxes(object_spectra, continuum, line_looked_for, lower_wav, upper_wav, do_errs=err_lists)
+                F, C, err_F, ew, lolim, uplim, err_ew = get_net_fluxes(object_spectra, continuum, nearest2line, lower_wav, upper_wav, do_errs=err_lists)
                 errs_net_fluxes.append(err_F)
                 errs_ews.append(err_ew)
             else:
@@ -814,8 +814,8 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             final_width = float(uplim - lolim)
             final_width = numpy.round(final_width, decimals=1)
             central_wavelength = float((uplim+lolim)/2.0)
-            print('center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew)
-            print 'center=', central_wavelength,'  Flux=',F, '  ew=', ew, '  from ', lolim, '  to ', uplim
+            #print 'center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew
+            #print 'center=', central_wavelength,'  Flux=',F, '  ew=', ew, '  from ', lolim, '  to ', uplim
             width_list.append(final_width)
             central_wavelength_list.append(central_wavelength)
             continuum_list.append(C)
@@ -939,10 +939,12 @@ def get_net_fluxes(object_spectra, continuum, line_looked_for, lower_wav, upper_
         #ew, lower_wav, upper_wav, err_ew = EQW(object_spectra, continuum, lower_wav, upper_wav, do_errs)
         #ew = numpy.squeeze(ew)
         ew, lower_wav, upper_wav, err_ew = find_EW(object_spectra, continuum, line_looked_for, lower_wav, upper_wav, do_errs)
+        #ew, lower_wav, upper_wav, err_ew = find_EW_alternative2splot(object_spectra, continuum, line_looked_for, lower_wav, upper_wav, do_errs)
     else:
         #ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)        
         # determine equivalent width by finding the max or the min of the line
         ew, lower_wav, upper_wav = find_EW(object_spectra, continuum, line_looked_for, lower_wav, upper_wav)
+        #ew, lower_wav, upper_wav = find_EW_alternative2splot(object_spectra, continuum, line_looked_for, lower_wav, upper_wav)
         #print 'I USED THE function that U want'
     ew = float(ew)
     F = ew * C #* (-1)   # with the actual equivalent width definition
@@ -1290,36 +1292,95 @@ def find_first2peaks(line_wave, line_flux, original_width):
     peak2, _, _ = recenter(line_wave_copy, line_flux_copy, original_width)
     return peak1, peak2   # these are the 2 WAVELENGTHS ath which there is a peak flux
 
-def find_EW(data_arr, cont_arr, line_looked_for, low, upp, do_errs=None):
+def find_splotEW(line_wave, line_flux, flux_cont, do_errs):
+    '''This function is the translation into python of the cl scripts: sumflux.x and eqwidth.x'''
+    sum1 = 0.0
+    rsum = 0.0
+    esum = 0.0
+    csum = 0.0
+    sum2 = 0.0
+    slope = (flux_cont[-1] - flux_cont[0]) / (line_wave[-1] - line_wave[0])
+    scale = max(line_flux)
+    if scale <= 0.0:
+        scale = 1.0
+    fc_first = flux_cont[0]
+    for w, f, fc in zip(line_wave, line_flux, flux_cont):
+        rampval = fc_first + slope * (w - line_wave[0])
+        sum1 = sum1 + fc
+        rsum = rsum + rampval
+        esum = esum + (1.0 - f/rampval)
+        delta = (f - rampval)/scale
+        csum = csum + numpy.abs(delta)**1.5 * w
+        sum2 = sum2 + numpy.abs(delta)**1.5
+    sum1 = sum1 + line_flux[0] + line_flux[-1]
+    rsum = rsum + flux_cont[0] + flux_cont[-1]
+    esum = esum + (1.0 - line_flux[0] / flux_cont[0]) + (1.0 - line_flux[-1] / flux_cont[-1])
+    delta = (line_flux[-1] - flux_cont[-1]) / scale
+    csum = csum + numpy.abs(delta)**1.5 * line_wave[-1]
+    sum2 = sum2 + numpy.abs(delta)**1.5
+    if sum2 != 0.0:
+        ctr = csum / sum2
+    else:
+        ctr = 0.0
+    # Correct for angstroms/channel
+    wpc = numpy.abs((line_wave[-1] - line_wave[0]) / float(len(line_wave) - 1))
+    sum1 = sum1 * wpc
+    rsum = rsum * wpc
+    esum = esum * wpc * -1 # this is to follow the convention of possitive=emission, negative=absorption
+    # Compute difference in flux between ramp and spectrum
+    flux_diff = sum1 - rsum
+    # compute eq width of feature using ramp midpoint as continuum
+    cont = 0.5 * (flux_cont[0] + flux_cont[-1])
+    # Print on status line
+    print 'center = %0.3f,   eqw = %0.4f,   continuum = %0.6e,   flux = %0.6e' % (ctr, esum, cont, flux_diff)
+    if do_errs != None:
+        return esum, line_wave[0], line_wave[-1], 1.0
+    else:
+        return esum, line_wave[0], line_wave[-1]
+
+def find_EW(data_arr, cont_arr, nearest2line, low, upp, do_errs=None):
     '''
     This function recenters the line according to the max or min (emission or absorption) and then adjusts 
     according to the min difference between the flux and the continuum.
-    # line_looked_for = the target line that we want to measure
+    nearest2line = the target line that we want to measure
     low = closest point in the wavelength array to lower part of the predefined width of the line
     upp = closest point in the wavelength array to upper part of the predefined width of the line
     '''
-    lower = float(low) + 3.5
-    upper = float(upp) + 3.3
+    original_width = float(upp) - float(low)
+    lower = float(low) - 0.5
+    upper = float(upp) + 2.5  # it is uneven due to redshift
+    elements = 100
+    line_wave, line_flux, _, _ = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
+    _, lower, upper = recenter(line_wave, line_flux, original_width)
+    line_wave, line_flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
+    if do_errs != None:
+        eqw, lolim, uplim , err_ew = find_splotEW(line_wave, line_flux, flux_cont, do_errs)
+        return (eqw, lolim, uplim, err_ew)
+    else:
+        eqw, lolim, uplim = find_splotEW(line_wave, line_flux, flux_cont, do_errs)
+        return (eqw, lolim, uplim)
+    
+def find_EW_alternative2splot(data_arr, cont_arr, line_looked_for, low, upp, do_errs=None):
+    '''
+    This function recenters the line according to the max or min (emission or absorption) and then adjusts 
+    according to the min difference between the flux and the continuum.
+    line_looked_for = the target line that we want to measure
+    low = closest point in the wavelength array to lower part of the predefined width of the line
+    upp = closest point in the wavelength array to upper part of the predefined width of the line
+    '''
+    lower = float(low) - 0.5
+    upper = float(upp) + 2.5  # it is uneven due to redshift
     original_width = float(upp) - float(low)
     original_center = (upper + lower)/2.0
     #print 'ORIGINAL CENTER=', original_center
     #print 'ORIGINALS:  lower =', lower, ' upper =', upper, '   width =', original_width
-    # Recenter the line according to the max in the sqared fluxes
+    # Recenter the line according to the max in the sqared fluxes and determine if we have an emission or 
+    # absorption at the closest point to the target line
     elements = 30
     line_wave, line_flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
-    # Determine if we have an emission or absorption at the closest point to the target line
     line_is_emission = False
     nearest2target_line, _ = find_nearest(line_wave, line_looked_for)
     print 'Nearest wavelegth in line array to the target line =', nearest2target_line
-    '''
-    nearest2target_line_flx = numpy.interp(nearest2target_line, line_wave, line_flux)
-    nearest2target_line_cont = numpy.interp(nearest2target_line, line_wave, flux_cont)
-    if nearest2target_line_flx >= nearest2target_line_cont:
-        line_is_emission = True
-        print' line is EMISSION'
-    else:
-        print' line is ABSORPTION'
-    '''
     recenter0, _, _ = recenter(line_wave, line_flux, original_width)
     recenter0_flx = numpy.interp(recenter0, line_wave, line_flux)
     recenter0_cont = numpy.interp(recenter0, line_wave, flux_cont)
@@ -1328,7 +1389,6 @@ def find_EW(data_arr, cont_arr, line_looked_for, low, upp, do_errs=None):
         print' line is EMISSION'
     else:
         print' line is ABSORPTION'
-        
     # WAIT! Before recentering to the max/min in the line array, make sure that the original center is a not peak or closer to it,
     # this part is just in case there is a close peak that is higher/lower than the original center.
     # Frirst normalize the spectrum
@@ -1349,7 +1409,7 @@ def find_EW(data_arr, cont_arr, line_looked_for, low, upp, do_errs=None):
             negative_fluxes.append(f)
     for w,f in zip(line_wave, norm_flx):
         print w, f
-    print 'lengths of positive_fluxes and negative_fluxes', len(positive_fluxes), len(negative_fluxes)
+    #print 'lengths of positive_fluxes and negative_fluxes', len(positive_fluxes), len(negative_fluxes)
     if line_is_emission:
         peak_flx = max(positive_fluxes)
     else:
@@ -1378,19 +1438,6 @@ def find_EW(data_arr, cont_arr, line_looked_for, low, upp, do_errs=None):
     upper = peak_wav + (original_width/2.0)
     # with the new lower and upper points, redetermine a line array
     line_wave, line_flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
-    '''
-    sq_fluxes = []
-    sq_contfluxes = []
-    for lf, cf in zip(line_flux, flux_cont):
-        sq_fluxes.append(lf*lf)
-        sq_contfluxes.append(cf*cf)
-    # Find out in the line array where is the point closest to the continuum to recenter the line according to it
-    diffs_list = []
-    for lw, sf, scf in zip(line_wave, sq_fluxes, sq_contfluxes):
-        diff = numpy.abs(sf - scf)
-        diffs_list.append(diff)
-        print 'Difference at ', lw, diff
-    '''
     # Find out in the line array where is the point closest to the continuum to recenter again according to it
     norm_flx = []
     for lw, lf, cf in zip(line_wave, line_flux, flux_cont):
@@ -1420,7 +1467,6 @@ def find_EW(data_arr, cont_arr, line_looked_for, low, upp, do_errs=None):
         #print('center=', new_center,'  final_width = %f' % uplim - lolim, '    ew=', eqw)
         #print 'lower_limit =', lolim, '  upper_limit =', uplim, '  ew =', eqw
         return (eqw, lolim, uplim)
-    
     
 #### Full width half maximum 
 def FWHM(sig):
