@@ -225,7 +225,7 @@ def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, o
     '''
     This function shifts the object's data to the rest frame (z=0). The function then fits a 
     continuum to the entire spectrum, omitting the lines windows (it interpolates 
-    in that region). It then CAN normalizes the entire spectrum.
+    in that region). It then CAN normalize the entire spectrum.
     The lines it looks for are those in the lines2fit.txt file.
     REQUIREMENTS:
     # object_spectra must be a 2D numpy array of wavelengths and fluxes
@@ -242,12 +242,12 @@ def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, o
     # 2D continuum numpy array of wavenegths and fluxes.
     '''
     print 'Calculating continuum...'
-    # Bring the object to rest wavelenght frame using 1+z = lambda_obs/lambda_theo - 1
+    # Bring the object to rest wavelength frame using 1+z = lambda_obs/lambda_theo - 1
     if z_correct == True:
         print '    *** Wavelengths corrected for redshift.'
         w_corr = object_spectra[0] / (1+float(z))
     else:
-        print '    *** Wavelengths NOT YET redshifted...'
+        print '    *** Wavelengths NOT YET corrected of redshift...'
         w_corr = object_spectra[0]
     # this is the array to find the continuum with
     corr_wf = numpy.array([w_corr, object_spectra[1]])
