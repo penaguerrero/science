@@ -806,7 +806,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             print '\n Looking for ',  line_looked_for #***
             print 'This is the closest wavelength in the data to the target line: ', nearest2line
             if do_errs != None:
-                F, C, err_F, ew, lolim, uplim, err_ew = get_net_fluxes(object_spectra, continuum, nearest2line, lower_wav, upper_wav, do_errs=err_lists)
+                F, C, err_F, ew, lolim, uplim, err_ew = get_net_fluxes(object_spectra, continuum, line_looked_for, lower_wav, upper_wav, do_errs=err_lists)
                 errs_net_fluxes.append(err_F)
                 errs_ews.append(err_ew)
             else:
@@ -814,8 +814,12 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             final_width = float(uplim - lolim)
             final_width = numpy.round(final_width, decimals=1)
             central_wavelength = float((uplim+lolim)/2.0)
-            #print 'center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew
-            #print 'center=', central_wavelength,'  Flux=',F, '  ew=', ew, '  from ', lolim, '  to ', uplim
+            print 'center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew
+            print 'center=', central_wavelength,'  Flux=',F, '  ew=', ew, '  from ', lolim, '  to ', uplim
+            #if line_looked_for ==  4640.0:
+            #    raw_input()
+            #if line_looked_for ==  4650.0:
+            #    raw_input()
             width_list.append(final_width)
             central_wavelength_list.append(central_wavelength)
             continuum_list.append(C)
@@ -1347,8 +1351,8 @@ def find_EW_withsplotfunc(data_arr, cont_arr, nearest2line, low, upp, do_errs=No
     upp = closest point in the wavelength array to upper part of the predefined width of the line
     '''
     original_width = float(upp) - float(low)
-    lower = float(low) - 0.5
-    upper = float(upp) + 2.5  # it is uneven due to redshift
+    lower = float(low)
+    upper = float(upp) + 3.5   # due to redshift
     elements = 100
     line_wave, line_flux, _, _ = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
     _, lower, upper = recenter(line_wave, line_flux, original_width)
@@ -1368,10 +1372,10 @@ def find_EW(data_arr, cont_arr, line_looked_for, low, upp, do_errs=None):
     low = closest point in the wavelength array to lower part of the predefined width of the line
     upp = closest point in the wavelength array to upper part of the predefined width of the line
     '''
-    lower = float(low) - 0.5
-    upper = float(upp) + 2.5  # it is uneven due to redshift
+    lower = float(low)
+    upper = float(upp) + 3.5   # due to redshift
     original_width = float(upp) - float(low)
-    original_center = (upper + lower)/2.0
+    original_center = (float(upp) + float(low))/2.0
     #print 'ORIGINAL CENTER=', original_center
     #print 'ORIGINALS:  lower =', lower, ' upper =', upper, '   width =', original_width
     # Recenter the line according to the max in the sqared fluxes and determine if we have an emission or 
@@ -1389,6 +1393,10 @@ def find_EW(data_arr, cont_arr, line_looked_for, low, upp, do_errs=None):
         print' line is EMISSION'
     else:
         print' line is ABSORPTION'
+    if line_looked_for == 4640.0:
+        line_is_emission = True
+    elif line_looked_for == 4650.0:
+        line_is_emission = True
     # WAIT! Before recentering to the max/min in the line array, make sure that the original center is a not peak or closer to it,
     # this part is just in case there is a close peak that is higher/lower than the original center.
     # Frirst normalize the spectrum
@@ -1407,9 +1415,7 @@ def find_EW(data_arr, cont_arr, line_looked_for, low, upp, do_errs=None):
             positive_fluxes.append(f)
         else:
             negative_fluxes.append(f)
-    #for w,f in zip(line_wave, norm_flx):
-    #    print w, f
-    #print 'lengths of positive_fluxes and negative_fluxes', len(positive_fluxes), len(negative_fluxes)
+    print 'lengths of positive_fluxes and negative_fluxes', len(positive_fluxes), len(negative_fluxes)
     if line_is_emission:
         peak_flx = max(positive_fluxes)
     else:
