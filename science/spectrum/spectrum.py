@@ -939,12 +939,12 @@ def get_net_fluxes(object_spectra, continuum, line_looked_for, lower_wav, upper_
         #ew, lower_wav, upper_wav, err_ew = EQW(object_spectra, continuum, lower_wav, upper_wav, do_errs)
         #ew = numpy.squeeze(ew)
         ew, lower_wav, upper_wav, err_ew = find_EW(object_spectra, continuum, line_looked_for, lower_wav, upper_wav, do_errs)
-        #ew, lower_wav, upper_wav, err_ew = find_EW_alternative2splot(object_spectra, continuum, line_looked_for, lower_wav, upper_wav, do_errs)
+        #ew, lower_wav, upper_wav, err_ew = find_EW_withsplotfunc(object_spectra, continuum, line_looked_for, lower_wav, upper_wav, do_errs)
     else:
         #ew, lower_wav, upper_wav = EQW(object_spectra, continuum, lower_wav, upper_wav)        
         # determine equivalent width by finding the max or the min of the line
         ew, lower_wav, upper_wav = find_EW(object_spectra, continuum, line_looked_for, lower_wav, upper_wav)
-        #ew, lower_wav, upper_wav = find_EW_alternative2splot(object_spectra, continuum, line_looked_for, lower_wav, upper_wav)
+        #ew, lower_wav, upper_wav = find_EW_withsplotfunc(object_spectra, continuum, line_looked_for, lower_wav, upper_wav)
         #print 'I USED THE function that U want'
     ew = float(ew)
     F = ew * C #* (-1)   # with the actual equivalent width definition
@@ -1338,7 +1338,7 @@ def find_splotEW(line_wave, line_flux, flux_cont, do_errs):
     else:
         return esum, line_wave[0], line_wave[-1]
 
-def find_EW(data_arr, cont_arr, nearest2line, low, upp, do_errs=None):
+def find_EW_withsplotfunc(data_arr, cont_arr, nearest2line, low, upp, do_errs=None):
     '''
     This function recenters the line according to the max or min (emission or absorption) and then adjusts 
     according to the min difference between the flux and the continuum.
@@ -1360,7 +1360,7 @@ def find_EW(data_arr, cont_arr, nearest2line, low, upp, do_errs=None):
         eqw, lolim, uplim = find_splotEW(line_wave, line_flux, flux_cont, do_errs)
         return (eqw, lolim, uplim)
     
-def find_EW_alternative2splot(data_arr, cont_arr, line_looked_for, low, upp, do_errs=None):
+def find_EW(data_arr, cont_arr, line_looked_for, low, upp, do_errs=None):
     '''
     This function recenters the line according to the max or min (emission or absorption) and then adjusts 
     according to the min difference between the flux and the continuum.
@@ -1376,7 +1376,7 @@ def find_EW_alternative2splot(data_arr, cont_arr, line_looked_for, low, upp, do_
     #print 'ORIGINALS:  lower =', lower, ' upper =', upper, '   width =', original_width
     # Recenter the line according to the max in the sqared fluxes and determine if we have an emission or 
     # absorption at the closest point to the target line
-    elements = 30
+    elements = 100
     line_wave, line_flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
     line_is_emission = False
     nearest2target_line, _ = find_nearest(line_wave, line_looked_for)
@@ -1407,8 +1407,8 @@ def find_EW_alternative2splot(data_arr, cont_arr, line_looked_for, low, upp, do_
             positive_fluxes.append(f)
         else:
             negative_fluxes.append(f)
-    for w,f in zip(line_wave, norm_flx):
-        print w, f
+    #for w,f in zip(line_wave, norm_flx):
+    #    print w, f
     #print 'lengths of positive_fluxes and negative_fluxes', len(positive_fluxes), len(negative_fluxes)
     if line_is_emission:
         peak_flx = max(positive_fluxes)
@@ -1459,13 +1459,15 @@ def find_EW_alternative2splot(data_arr, cont_arr, line_looked_for, low, upp, do_
     print 'limits:   ', lolim, uplim
     # Determine the equivalent width
     if do_errs != None:
-        eqw, lolim, uplim , err_ew = EQW(data_arr, cont_arr, lolim, uplim, do_errs)
+        #eqw, lolim, uplim , err_ew = EQW(data_arr, cont_arr, lolim, uplim, do_errs)
         #print 'lower_limit =', lolim, '  upper_limit =', uplim, '  ew =', eqw, '+-', err_ew
+        eqw, lolim, uplim , err_ew = find_splotEW(line_wave, line_flux, flux_cont, do_errs)
         return (eqw, lolim, uplim, err_ew)
     else:
-        eqw, lolim, uplim = EQW(data_arr, cont_arr, lolim, uplim)
+        #eqw, lolim, uplim = EQW(data_arr, cont_arr, lolim, uplim)
         #print('center=', new_center,'  final_width = %f' % uplim - lolim, '    ew=', eqw)
         #print 'lower_limit =', lolim, '  upper_limit =', uplim, '  ew =', eqw
+        eqw, lolim, uplim = find_splotEW(line_wave, line_flux, flux_cont, do_errs)
         return (eqw, lolim, uplim)
     
 #### Full width half maximum 
