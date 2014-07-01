@@ -801,6 +801,8 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             # according to the strength of the line
             central_wavelength = object_spectra[0][(object_spectra[0] == nearest2line)]
             line_width = lines_catalog[7][i]
+            if (line_looked_for ==  4267.15) or (line_looked_for == 4640.0) or (line_looked_for == 4650.0):
+                line_width = 5.0 
             lower_wav = central_wavelength - (line_width/2)
             upper_wav = central_wavelength + (line_width/2)
             print '\n Looking for ',  line_looked_for #***
@@ -1393,10 +1395,10 @@ def find_EW(data_arr, cont_arr, line_looked_for, low, upp, do_errs=None):
         print' line is EMISSION'
     else:
         print' line is ABSORPTION'
-    if line_looked_for == 4640.0:
-        line_is_emission = True
-    elif line_looked_for == 4650.0:
-        line_is_emission = True
+    #if line_looked_for == 4640.0:
+    #    line_is_emission = True
+    #elif line_looked_for == 4650.0:
+    #    line_is_emission = True
     # WAIT! Before recentering to the max/min in the line array, make sure that the original center is a not peak or closer to it,
     # this part is just in case there is a close peak that is higher/lower than the original center.
     # Frirst normalize the spectrum
