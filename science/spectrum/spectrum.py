@@ -247,7 +247,7 @@ def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, o
         print '    *** Wavelengths corrected for redshift.'
         w_corr = object_spectra[0] / (1+float(z))
     else:
-        print '    *** Wavelengths NOT YET corrected of redshift...'
+        print '    *** Wavelengths NOT YET corrected for redshift...'
         w_corr = object_spectra[0]
     # this is the array to find the continuum with
     corr_wf = numpy.array([w_corr, object_spectra[1]])
@@ -818,8 +818,8 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             central_wavelength = float((uplim+lolim)/2.0)
             print 'center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew
             print 'center=', central_wavelength,'  Flux=',F, '  ew=', ew, '  from ', lolim, '  to ', uplim
-            #if line_looked_for ==  4640.0:
-            #    raw_input()
+            if line_looked_for ==  4861.33:
+                raw_input()
             #if line_looked_for ==  4650.0:
             #    raw_input()
             width_list.append(final_width)
@@ -1145,18 +1145,18 @@ def EQW(data_arr, cont_arr, lower, upper, do_errs=None):
     # THE DEFINITION OF EQW USED IS POSITIVE FOR EMISSION AND NEGATIVE FOR ABSORPTION
     '''
     # Finding closest wavelength to the desired lower and upper limits
-    #lower, _ = find_nearest(data_arr[0], lower)
-    #upper, _ = find_nearest(data_arr[0], upper)
+    lower, _ = find_nearest(data_arr[0], lower)
+    upper, _ = find_nearest(data_arr[0], upper)
     #print('Closest points in array to lower limit and upper limit: %f, %f' % (lower, upper))
     #width = upper - lower
     #print('Actual width = %f' % (width))
     # Finding the line arrays to use in the integration
-    #wavelength, flux = selection(data_arr[0], data_arr[1], lower, upper)
-    #_, flux_cont = selection(cont_arr[0], cont_arr[1], lower, upper)
+    wavelength, flux = selection(data_arr[0], data_arr[1], lower, upper)
+    _, flux_cont = selection(cont_arr[0], cont_arr[1], lower, upper)
     
     # Interpolate so that the flux selection array has 10 elements
-    elements = 100
-    wavelength, flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
+    #elements = 100
+    #wavelength, flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
     # Finding the average step for the integral
     N = len(wavelength)
     i = 0
@@ -1382,7 +1382,7 @@ def find_EW(data_arr, cont_arr, line_looked_for, low, upp, do_errs=None):
     #print 'ORIGINALS:  lower =', lower, ' upper =', upper, '   width =', original_width
     # Recenter the line according to the max in the sqared fluxes and determine if we have an emission or 
     # absorption at the closest point to the target line
-    elements = 100
+    elements = 10
     line_wave, line_flux, _, flux_cont = fill_EWarr(data_arr, cont_arr, lower, upper, elements)
     line_is_emission = False
     nearest2target_line, _ = find_nearest(line_wave, line_looked_for)
