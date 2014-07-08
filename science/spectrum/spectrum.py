@@ -30,7 +30,7 @@ def sigma_clip_flux(flux_arr, sigmas_away):
         1. standard deviation
         2. the sigma-clipped array
     '''
-    std = find_std(flux_arr)
+    std, _ = find_std(flux_arr)
     norm_flx = flux_arr /std
     clip_up = sigmas_away
     clip_down = (-1) * sigmas_away
@@ -818,8 +818,11 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             central_wavelength = float((uplim+lolim)/2.0)
             print 'center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew
             print 'center=', central_wavelength,'  Flux=',F, '  ew=', ew, '  from ', lolim, '  to ', uplim
-            if line_looked_for ==  4861.33:
-                raw_input()
+            #if line_looked_for ==  4861.33:
+                #line_wavs = object_spectra[0][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
+                #line_flxs = object_spectra[1][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
+                #deblend_line(line_wavs, line_flxs, final_width, C, F, ew, plot_fit=True)
+                #raw_input()
             #if line_looked_for ==  4650.0:
             #    raw_input()
             width_list.append(final_width)
@@ -1477,11 +1480,66 @@ def find_EW(data_arr, cont_arr, line_looked_for, low, upp, do_errs=None):
         #print 'lower_limit =', lolim, '  upper_limit =', uplim, '  ew =', eqw
         eqw, lolim, uplim = find_splotEW(line_wave, line_flux, flux_cont, do_errs)
         return (eqw, lolim, uplim)
+
+def deblend_line(object_spectra, catal_wavelengths, obs_wavelengths, obs_fluxes, obs_cont, lines2deblend, width_of_lines, plot_fit=False):
+    '''This function deblends the input line.
+    lines2deblen = list of the central wavelengths that compose the blend
+    width_of_lines = list of the widths of the componing lines, must have same dimension as lines2deblend 
+    if plot_fit = True, the function shows plot of deblend.'''
+    wavs_lines2deblend = []
+    flxs_lines2deblend = []
+    gaussfits = []
+    # Determine the arrays for the lines , as well as the total flux, continuum, equivalent width
+    for line, width in zip(lines2deblend, width_of_lines):
+        if line in catal_wavelengths:
+            obsline_idx = catal_wavelengths.index(line)
+            obsline = obs_wavelengths[obsline_idx]
+            lolim = obsline - width/2.0
+            uplim = obsline + width/2.0
+            line_wavs = object_spectra[0][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
+            line_flxs = object_spectra[1][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
+            wavs_lines2deblend.append(line_wavs)
+            flxs_lines2deblend.append(line_flxs)
+            # Determine the where is the center of the lines to deblend
+            sig, _ = find_std(line_wavs)
+            # p0 is the initial guess for the fitting coefficients (a, mean, and sigma)
+            p0 = [1.0, line, sig]            
+            coeff, _ = optimize.curve_fit(gaus_function, line_wavs, line_flxs, p0=p0)
+            gf = gaus_function(line_wavs, *coeff)
+            gaussfits.append(gf)
+            if plot_fit:
+                pyplot.plot(line_wavs, gf,'ro:',label='fit')
+    if plot_fit:
+        pyplot.plot(object_spectra[0], object_spectra[1],'k+:',label='data')
+        pyplot.xlim(lolim, uplim)
+        pyplot.legend()
+        pyplot.title('Line deblend with Gaussian Fit')
+        pyplot.xlabel('Wavelength  [$\AA$]')
+        pyplot.ylabel('Flux  [ergs/s/cm$^2$/$\AA$]')
+        pyplot.show()
+
+    #return 
+
+#### Gaussian fit
+def gaus_function(x, *p):
+    '''This function finds the gaussian y corresponding point.
+    x = array of x-values
+    RETURNS: array of y-values '''
+    a, meanX, sig = p
+    return a * numpy.exp(-(x-meanX)**2 / (2.0*sig**2))
+
+def gaus_fit(x, y):
+    sig, mean = find_std(x)
+    # p0 is the initial guess for the fitting coefficients (a, mean, and sigma)
+    p0 = [1.0, mean, sig]
+    coeff, _ = optimize.curve_fit(gaus_function, x, y, p0=p0)
+    gf = gaus_function(x, *coeff)
+    #print 'these are the coefficients:  a=', coeff[0], '  mean=', coeff[1], '  sigma=', coeff[2]
+    return gf, sig
     
 #### Full width half maximum 
 def FWHM(sig):
     # This can only be runned after the gaus_fit function
-    #fwhm = 2 * (2 * math.log1p(2))**0.5 * sig
     fwhm = 2 * numpy.sqrt(2 * numpy.log(2)) * sig
     print ('FWHM = ', fwhm)
     return fwhm
@@ -1498,9 +1556,9 @@ def find_std(arr):
         diff = a - mean
         diffsq = diff * diff
         diff2meansq_list.append(diffsq)
-    std = ( 1/(N-1) * sum(diff2meansq_list) )**(0.5)
+    std = ( 1.0/(N-1.0) * sum(diff2meansq_list) )**(0.5)
     #print 'sigma = ', std
-    return std
+    return std, mean
 
 def absolute_err(measurement, true_value):
     '''This function finds the absolute value of the error given the measurement and true values.'''
