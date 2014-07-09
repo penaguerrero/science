@@ -1480,38 +1480,47 @@ def find_EW(data_arr, cont_arr, line_looked_for, low, upp, do_errs=None):
         #print 'lower_limit =', lolim, '  upper_limit =', uplim, '  ew =', eqw
         eqw, lolim, uplim = find_splotEW(line_wave, line_flux, flux_cont, do_errs)
         return (eqw, lolim, uplim)
+    
 
-def deblend_line(object_spectra, catal_wavelengths, obs_wavelengths, obs_fluxes, obs_cont, lines2deblend, width_of_lines, plot_fit=False):
+def deblend_line(object_spectra, contum_spectra, catal_wavelengths, obs_wavelengths, tot_flx, tot_cont, lines2deblend, width_of_lines, plot_fit=False):
     '''This function deblends the input line.
     lines2deblen = list of the central wavelengths that compose the blend
-    width_of_lines = list of the widths of the componing lines, must have same dimension as lines2deblend 
+    width_of_lines = width of the componing lines (is the same for all the components of the blend)
     if plot_fit = True, the function shows plot of deblend.'''
     wavs_lines2deblend = []
     flxs_lines2deblend = []
     gaussfits = []
     # Determine the arrays for the lines , as well as the total flux, continuum, equivalent width
-    for line, width in zip(lines2deblend, width_of_lines):
+    for line in lines2deblend:
+        print 'line and width:', line, width_of_lines
         if line in catal_wavelengths:
             obsline_idx = catal_wavelengths.index(line)
             obsline = obs_wavelengths[obsline_idx]
-            lolim = obsline - width/2.0
-            uplim = obsline + width/2.0
-            line_wavs = object_spectra[0][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
-            line_flxs = object_spectra[1][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
+            lolim = obsline - width_of_lines/2.0
+            uplim = obsline + width_of_lines/2.0
+            print 'center, lolim, uplim:', obsline, lolim, uplim
+            nearest2lolim, _ = find_nearest(object_spectra[0], lolim)
+            nearest2uplim, _ = find_nearest(object_spectra[0], uplim)
+            line_wavs = object_spectra[0][(object_spectra[0] >= nearest2lolim) & (object_spectra[0] <= nearest2uplim)]
+            line_flxs = object_spectra[1][(object_spectra[0] >= nearest2lolim) & (object_spectra[0] <= nearest2uplim)]
             wavs_lines2deblend.append(line_wavs)
             flxs_lines2deblend.append(line_flxs)
+            print 'line_wavs', line_wavs
+            print 'line_flxs', line_flxs
             # Determine the where is the center of the lines to deblend
             sig, _ = find_std(line_wavs)
             # p0 is the initial guess for the fitting coefficients (a, mean, and sigma)
-            p0 = [1.0, line, sig]            
+            p0 = [1.0, obsline, sig]            
             coeff, _ = optimize.curve_fit(gaus_function, line_wavs, line_flxs, p0=p0)
             gf = gaus_function(line_wavs, *coeff)
             gaussfits.append(gf)
             if plot_fit:
-                pyplot.plot(line_wavs, gf,'ro:',label='fit')
+                pyplot.plot(line_wavs, gf,'b:',label='fit')
     if plot_fit:
-        pyplot.plot(object_spectra[0], object_spectra[1],'k+:',label='data')
-        pyplot.xlim(lolim, uplim)
+        pyplot.plot(object_spectra[0], object_spectra[1],'k',label='data')
+        pyplot.plot(contum_spectra[0], contum_spectra[1],'r:',label='continuum')
+        pyplot.xlim(lolim-75.0, uplim+75.0)
+        pyplot.ylim((tot_flx*0.1)-tot_flx, tot_flx+(tot_flx*0.1))
         pyplot.legend()
         pyplot.title('Line deblend with Gaussian Fit')
         pyplot.xlabel('Wavelength  [$\AA$]')
