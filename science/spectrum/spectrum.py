@@ -1499,8 +1499,8 @@ def deblend_line(object_spectra, contum_spectra, catal_wavelengths, obs_waveleng
     lolim = mainline - (width/2.0)
     uplim = mainline + (width/2.0)
     line_waves = object_spectra[0][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
-    sig, _ = find_std(line_waves)
-    print 'sigma = ', sig
+    sig0, _ = find_std(line_waves)
+    print 'sigma = ', sig0
     # Determine the arrays for the lines , as well as the total flux, continuum, equivalent width
     for line in lines2deblend:
         print 'line and width:', line, width
@@ -1524,18 +1524,19 @@ def deblend_line(object_spectra, contum_spectra, catal_wavelengths, obs_waveleng
             ## Determine the where is the center of the lines to deblend
             #sig, _ = find_std(x)
             # p0 is the initial guess for the fitting coefficients (mean and sigma)
-            p0 = [line, sig]            
-            coeff, _ = optimize.curve_fit(gaus_function, x, y, p0=p0)
-            gf = gaus_function(x, *coeff)
+            p0 = [line, sig0]            
+            #coeff, _ = optimize.curve_fit(gaus_function, x, y, p0=p0)
+            #print 'coeff: mean, sigma =', coeff
+            gf = gaus_function(x, *p0)
             for i in range(len(gf)):
                 gf[i] = gf[i] + cont[i]
             gaussfits.append(gf)
             if plot_fit:
-                pyplot.plot(x, gf,'b',label='fit')
+                pyplot.plot(x, gf,'b--',label='fit')
     # Sum the initial gaussians
     y_sum = sum(gaussfits)
     diff = lines2deblend[1] - lines2deblend[0]
-    initial_param4residuals = [lines2deblend[0], diff, sig, sig]
+    initial_param4residuals = [lines2deblend[0], lines2deblend[1], sig0, sig0]
     plsq = optimize.leastsq(residuals, initial_param4residuals, args=(y, x))
     print plsq
     # Determine the estimate
@@ -1544,10 +1545,10 @@ def deblend_line(object_spectra, contum_spectra, catal_wavelengths, obs_waveleng
         y_est[i] = y_est[i] + cont[i]
     
     if plot_fit:
-        pyplot.plot(object_spectra[0], object_spectra[1],'k',label='data')
+        pyplot.plot(object_spectra[0], object_spectra[1],'k:',label='data')
         pyplot.plot(contum_spectra[0], contum_spectra[1],'r:',label='continuum')
         #pyplot.plot(x, y,'k')
-        pyplot.plot(x, y_est,'g')
+        pyplot.plot(x, y_est,'g--')
         pyplot.xlim(lolim-75.0, uplim+75.0)
         pyplot.ylim((tot_flx*0.1)-tot_flx, tot_flx+(tot_flx*0.1))
         pyplot.legend()
@@ -1563,22 +1564,20 @@ def gaus_function(x, meanX, sig):
     x = array of x-values
     RETURNS: array of y-values '''
     #a, meanX, sig = p
-    a=1.0/(sig*numpy.sqrt(2*numpy.pi)) #1.0
+    a=1.0#/(sig*numpy.sqrt(2*numpy.pi))
     return a * numpy.exp(-(x-meanX)**2 / (2.0*sig**2))
 
 def gaus_fit(x, y):
     sig, mean = find_std(x)
-    # p0 is the initial guess for the fitting coefficients (a, mean, and sigma)
-    p0 = [1.0, mean, sig]
+    # p0 is the initial guess for the fitting coefficients (mean and sigma)
+    p0 = [mean, sig]
     coeff, _ = optimize.curve_fit(gaus_function, x, y, p0=p0)
     gf = gaus_function(x, *coeff)
     #print 'these are the coefficients:  a=', coeff[0], '  mean=', coeff[1], '  sigma=', coeff[2]
     return gf, sig
 
 def residuals(p, y, x):
-    m, dm, sd1, sd2 = p
-    m1 = m
-    m2 = m1 + dm
+    m1, m2, sd1, sd2 = p
     y_fit = gaus_function(x, m1, sd1) + gaus_function(x, m2, sd2)
     err = y - y_fit
     return err
@@ -1603,10 +1602,10 @@ def deblend_with_gauss(object_spectra, contum_spectra, catal_wavelengths, obs_wa
     for i in range(len(y)):
         y[i] = y[i] - line_cont[i]
     # Initial conditions
-    mainline = (lines2deblend[0] + lines2deblend[1])/2.0
-    mean, diff, sig1, sig2 = [mainline, 2.0, 1.0, 1.0] 
-    param = [mean, diff, sig1, sig2]
-    y_init = gaus_function(x, mean, sig1) + gaus_function(x, mean, sig2)
+    #mainline = (lines2deblend[0] + lines2deblend[1])/2.0
+    mean1, mean2, sig1, sig2 = [lines2deblend[0], lines2deblend[1], 1.0, 1.0] 
+    param = [mean1, mean2, sig1, sig2]
+    y_init = gaus_function(x, mean1, sig1) + gaus_function(x, mean2, sig2)
     p = [lines2deblend[0], lines2deblend[1], sig1, sig1]
     plsq = optimize.leastsq(residuals, param, args=(y, x))
     # Determine the estimate
