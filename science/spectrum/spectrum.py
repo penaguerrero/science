@@ -1492,21 +1492,28 @@ def deblend_line(object_spectra, contum_spectra, catal_wavelengths, obs_waveleng
     wavs_lines2deblend = []
     flxs_lines2deblend = []
     gaussfits = []
+    sigmas = []
     #FIRST ESTIMATE
     # Determine the standard deviation at the center of the lines to deblend
-    width = width_of_lines + 5.0    # this adds 2.5 A from each side to "give room" for the fit 
-    mainline = (lines2deblend[0] + lines2deblend[-1])/2.0
-    lolim = mainline - (width/2.0)
-    uplim = mainline + (width/2.0)
+    width = width_of_lines #+ 50.0    # this adds 25 A from each side to "give room" for the fit 
+    middle = (lines2deblend[0] + lines2deblend[-1])/2.0
+    lolim = middle - (width/2.0)
+    uplim = middle + (width/2.0)
+    #x = object_spectra[0][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
+    #y = object_spectra[1][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
+    #coeff, _ = optimize.curve_fit(gaus_function, x, y, p0=[middle, 3.0])
+    #print 'coeff: mean, sigma =', coeff
+    #sig0 = coeff[-1]
     line_waves = object_spectra[0][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
-    sig0, _ = find_std(line_waves)
-    print 'sigma = ', sig0
+    sig0, mean = find_std(line_waves)
+    print 'sigma =', sig0, '   mean =', mean
     # Determine the arrays for the lines , as well as the total flux, continuum, equivalent width
     for line in lines2deblend:
         print 'line and width:', line, width
         if line in catal_wavelengths:
             obsline_idx = catal_wavelengths.index(line)
             obsline = obs_wavelengths[obsline_idx]
+            width = width_of_lines + 5.0    # this adds 2.5 A from each side to "give room" for the fit 
             lolim = obsline - width/2.0
             uplim = obsline + width/2.0
             print 'center, lolim, uplim:', obsline, lolim, uplim
@@ -1515,14 +1522,16 @@ def deblend_line(object_spectra, contum_spectra, catal_wavelengths, obs_waveleng
             #x = object_spectra[0][(object_spectra[0] >= nearest2lolim) & (object_spectra[0] <= nearest2uplim)]
             #y = object_spectra[1][(object_spectra[0] >= nearest2lolim) & (object_spectra[0] <= nearest2uplim)]
             #cont = contum_spectra[1][(contum_spectra[0] >= nearest2lolim) & (contum_spectra[0] <= nearest2uplim)]
-            x, y, _, cont = fill_EWarr(object_spectra, contum_spectra, nearest2lolim, nearest2uplim, elements=5)
+            x, y, _, cont = fill_EWarr(object_spectra, contum_spectra, nearest2lolim, nearest2uplim, elements=4)
             # Remove the "irrelevant" information
             for i in range(len(y)):
                 y[i] = y[i] - cont[i]
             wavs_lines2deblend.append(x)
             flxs_lines2deblend.append(y)
             ## Determine the where is the center of the lines to deblend
-            #sig, _ = find_std(x)
+            sig, _ = find_std(x)
+            print 'individual sigma =', sig
+            sigmas.append(sig)
             # p0 is the initial guess for the fitting coefficients (mean and sigma)
             p0 = [line, sig0]            
             #coeff, _ = optimize.curve_fit(gaus_function, x, y, p0=p0)
@@ -1534,21 +1543,20 @@ def deblend_line(object_spectra, contum_spectra, catal_wavelengths, obs_waveleng
             if plot_fit:
                 pyplot.plot(x, gf,'b--',label='fit')
     # Sum the initial gaussians
-    y_sum = sum(gaussfits)
-    diff = lines2deblend[1] - lines2deblend[0]
-    initial_param4residuals = [lines2deblend[0], lines2deblend[1], sig0, sig0]
+    #y_sum = sum(gaussfits)
+    initial_param4residuals = [lines2deblend[0], lines2deblend[1], sigmas[0], sigmas[1]]
     plsq = optimize.leastsq(residuals, initial_param4residuals, args=(y, x))
     print plsq
     # Determine the estimate
-    y_est = gaus_function(x, plsq[0][0], plsq[0][2]) + gaus_function(x, plsq[0][0] + plsq[0][1], plsq[0][3])
+    y_est = gaus_function(x, plsq[0][0], plsq[0][2]) + gaus_function(x, plsq[0][1], plsq[0][3])
     for i in range(len(y_est)):
         y_est[i] = y_est[i] + cont[i]
     
     if plot_fit:
         pyplot.plot(object_spectra[0], object_spectra[1],'k:',label='data')
         pyplot.plot(contum_spectra[0], contum_spectra[1],'r:',label='continuum')
-        #pyplot.plot(x, y,'k')
-        pyplot.plot(x, y_est,'g--')
+        pyplot.plot(x, y+cont,'k')
+        #pyplot.plot(x, y_est,'g--')
         pyplot.xlim(lolim-75.0, uplim+75.0)
         pyplot.ylim((tot_flx*0.1)-tot_flx, tot_flx+(tot_flx*0.1))
         pyplot.legend()
