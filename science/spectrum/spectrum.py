@@ -1535,6 +1535,36 @@ def fill_arr2limit(x, y, ylimit, fromX, toX, resolution_of_spectra):
     newx_list.insert(idx_end, toX)
     newy_list.insert(idx_end, toX_y)
     newc_list.insert(idx_limit, toX_c)
+
+    # For best fitting purposes, we will end the line where there is a min in the flux towards that wavelength
+    maxpt = max(newy_list)      
+    maxpt_idx = newy_list.index(maxpt)
+    sliceylist = newy_list[maxpt_idx:idx_end]
+    minpt2end = min(sliceylist)
+    minpt2end_idx = newy_list.index(minpt2end)
+    fromX_idx = newx_list.index(fromX)
+    slicexlist = newx_list[fromX_idx:minpt2end_idx+1]
+    sliceylist = newy_list[fromX_idx:minpt2end_idx+1]
+    sliceclist = newc_list[fromX_idx:minpt2end_idx+1]
+    # turn the lists into numpy array
+    newx = numpy.array(slicexlist) 
+    newy = numpy.array(sliceylist) 
+    newc = numpy.array(sliceclist)
+    # Now make sure these lists go down all the way to the ylimit or continuum fromX toX
+    newx = numpy.append(newx, toX)
+    newy = numpy.append(newy, toX_c)
+    newc = numpy.append(newc, toX_c)
+    toXplus1 = newx_list[idx_end+1]
+    newx = numpy.append(newx, toXplus1)
+    newy = numpy.append(newy, toX_c)
+    newc = numpy.append(newc, toX_c)
+    #print 'fromX=', fromX, fromX_y, fromX_c
+    #print 'toX=', toX, toX_y, toX_c
+    #print 'inserts:', newx_list[fromX_idx]
+    #print newx
+    #print newy
+    #print newc
+    '''
     # turn the lists into numpy array
     newx = numpy.array(newx_list) 
     newy = numpy.array(newy_list) 
@@ -1544,6 +1574,7 @@ def fill_arr2limit(x, y, ylimit, fromX, toX, resolution_of_spectra):
     newy = newy[(newx >= fromX) & (newx <= toX)]
     newc = newc[(newx >= fromX) & (newx <= toX)]
     print 'shape of array of line only', numpy.shape(newx)
+    '''
     return newx, newy, newc
     
 def deblend_line(object_spectra, contum_spectra, catal_wavelengths, obs_wavelengths, tot_flx, tot_cont, lines2deblend, width_of_lines, plot_fit=False):
@@ -1576,31 +1607,39 @@ def deblend_line(object_spectra, contum_spectra, catal_wavelengths, obs_waveleng
             #x, y, _, cont = fill_EWarr(object_spectra, contum_spectra, nearest2lolim, nearest2uplim, elements=6)
             resolution_of_spectra = 3.0
             x, y, cont = fill_arr2limit(object_spectra[0], object_spectra[1], contum_spectra[1], lolim, uplim, resolution_of_spectra)
-            #y = y / 1.0e-15 # Normalizing the flux to avoid computing problems
-            y = y / cont#/1.0e-15 # Remove continuum to get a better fit
-            print y
-            wavs_lines2deblend.append(x)
-            flxs_lines2deblend.append(y)
+            y = y / 1.0e-15 # Normalizing the flux to avoid computing problems
+            #cont = cont / 1.0e-15
+            #y = y / cont    # Remove continuum to get a better fit
+            #print y
+            #wavs_lines2deblend.append(x)
+            #flxs_lines2deblend.append(y)
             ## Determine the where is the center of the lines to deblend
-            sig, _ = find_std(x)
+            #sig, _ = find_std(x)
             #print 'individual sigma =', sig
-            sigmas.append(sig)
+            #sigmas.append(sig)
             # p0 is the initial guess for the fitting coefficients (a, mean, and sigma)
             a = 1.0 # first guess
-            p0 = [a, line, sig]  
+            p0 = [a, line, 1.5]  
             #print 'initial conditions:', p0   
-            FWHM(sig)       
-            coeff, _ = optimize.curve_fit(gaus_function, y, x, p0=p0)
+            #FWHM(sig)       
+            gf = gaus_function(x, *p0)
+            coeff, _ = optimize.curve_fit(gaus_function, x, y)#, p0=p0)
             print 'coeff: a, mean, sigma =', coeff
-            gf = gaus_function(x, *coeff) * cont
-            y = y * 1.0e-15
+            sigmas.append(coeff[-1])            
             #for i in range(len(gf)):
             #    print 'at (x, y) of', (x[i], y[i]), 'fitted gauss point:', gf[i]
-            gaussfits.append(gf)
+            gaussfits.append(gf * 1.0e-15 + cont)
             if plot_fit:
                 pyplot.plot(x, gf,'b:',label='initial guess')
     # Sum the initial gaussians
-    #y_sum = sum(gaussfits)
+    p0 = [a, a, lines2deblend[0], lines2deblend[1], sigmas[0], sigmas[1]]
+    #print 'this is the used y:', y
+    coeffini, _ = optimize.curve_fit(gauss_sum, y, x)#, p0=p0)
+    y_initsum = gauss_sum(x, coeffini[0], coeffini[1], lines2deblend[0], lines2deblend[1], sigmas[0], sigmas[1]) * 1.0e-15 + cont
+    #diff = lines2deblend[1] - lines2deblend[0]
+    #y_initsum = gaus_function(x, a, lines2deblend[0], 3.5) + gaus_function(x, a, diff, 3.0)
+    print 'coeffini, y_initsum', coeffini[0], coeffini[1], y_initsum
+    pyplot.plot(x, y_initsum,'b-.',label='initial guess')
     initial_param4residuals = [1.0, 1.0, lines2deblend[0], lines2deblend[1], sigmas[0], sigmas[1]]
     plsq = optimize.leastsq(residuals, initial_param4residuals, args=(y, x))
     print plsq
@@ -1608,7 +1647,8 @@ def deblend_line(object_spectra, contum_spectra, catal_wavelengths, obs_waveleng
     y1 = gaus_function(x, plsq[0][0], plsq[0][2], plsq[0][4])
     y2 = gaus_function(x, plsq[0][1], plsq[0][3], plsq[0][5])
     y_est = gaus_function(x, plsq[0][0], plsq[0][2], plsq[0][4]) + gaus_function(x, plsq[0][1], plsq[0][3], plsq[0][5])
-    
+    # Return values to original state
+    y = y * 1.0e-15
     if plot_fit:
         pyplot.plot(object_spectra[0], object_spectra[1],'k:',label='data')
         pyplot.plot(contum_spectra[0], contum_spectra[1],'r:',label='continuum')
@@ -1617,7 +1657,8 @@ def deblend_line(object_spectra, contum_spectra, catal_wavelengths, obs_waveleng
         pyplot.plot(x, y2,'m--',label='line2')
         pyplot.plot(x, y_est,'g--',label='sum')
         pyplot.xlim(lolim-25.0, uplim+25.0)
-        pyplot.ylim(tot_flx-(tot_flx*0.3), tot_flx+(tot_flx*0.1))
+        pyplot.ylim(0.0, 2.5e-15)
+        #pyplot.ylim(tot_flx-(tot_flx*0.3), tot_flx+(tot_flx*0.1))
         pyplot.legend()
         pyplot.title('Line deblend with Gaussian Fit')
         pyplot.xlabel('Wavelength  [$\AA$]')
@@ -1630,8 +1671,17 @@ def gaus_function(x, norm, meanX, sig):
     '''This function finds the gaussian y corresponding point.
     x = array of x-values
     RETURNS: array of y-values '''
-    a = norm#/(sig*numpy.sqrt(2*numpy.pi))
+    a = norm/(sig*numpy.sqrt(2*numpy.pi))
     return a * numpy.exp(-(x-meanX)**2 / (2.0*sig**2))
+
+def gauss_sum(x, norm1, norm2, mean1, mean2, sig1, sig2):
+    '''This function finds the sum of 2 gaussians.
+    x = array of x-values
+    RETURNS: y-point in gaussian '''
+    norm = norm1 * norm2
+    a = norm/numpy.sqrt(2.0*numpy.pi*(sig1**2 + sig2**2))    
+    xtot = x + x
+    return a * numpy.exp(-(xtot-(mean1+mean2))**2 / (2.0*(sig1**2 + sig2**2)))
 
 def gaus_fit(x, y):
     sig, mean = find_std(x)
