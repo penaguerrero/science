@@ -640,9 +640,11 @@ def readlines_from_lineinfo(text_file, cols_in_file=None):
         f = open(text_file, 'r')
         list_rows_of_file = f.readlines()
         f.close()
+    widths_faintObj = []
+    widths_strongObj = []
     for row in list_rows_of_file:
         # Disregard comment symbol
-        if '#' not in row:
+        if '#'  not in row:
             # Split each row into columns
             line_data = row.split()
             # append the element into each column in the cols_in_file
@@ -650,7 +652,20 @@ def readlines_from_lineinfo(text_file, cols_in_file=None):
                 if '.' in item:
                     item = float(item)
                 col.append(item)
-    return cols_in_file
+        if 'widths' in row:
+            kk = string.split(row, '=')
+            if 'faint' in kk[0]:
+                kk2 = string.split(kk[1], sep=',')
+                for number in kk2:
+                    widths_faintObj.append(float(number))
+            elif 'strong' in kk[0]:
+                kk2 = string.split(kk[1], sep=',')
+                for number in kk2:
+                    widths_strongObj.append(float(number))
+    if len(widths_faintObj) > 0:
+        return cols_in_file, widths_faintObj, widths_strongObj
+    else:
+        return cols_in_file
 
 def n4airvac_conversion(wav):
     '''This function finds the index of refraction for that wavelength.
@@ -686,8 +701,6 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
     # Read the line_catalog file, assuming that the path is the same:
     # '/Users/name_of_home_directory/Documents/AptanaStudio3/science/science/spectrum/lines_catalog.txt'
     line_catalog_path = os.path.abspath('../../science/science/spectrum/lines_catalog.txt')
-    if faintObj == True:
-        line_catalog_path = os.path.abspath('../../science/science/spectrum/lines_catalog_faintObjects.txt')        
     # Define the columns of the file
     wavelength = []
     element = []
@@ -700,7 +713,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
     # Define the list of the files to be read
     text_file_list = [line_catalog_path]
     # Read the files
-    data = readlines_from_lineinfo(text_file_list, cols_in_file)
+    data, widths_faintObj, widths_strongObj = readlines_from_lineinfo(text_file_list, cols_in_file)
     wavelength, element, ion, forbidden, how_forbidden, transition, strong_line = data
     # If the wavelength is grater than 2000 correct the theoretical air wavelengths to vacuum using the IAU
     # standard for conversion from air to vacuum wavelengths is given in Morton (1991, ApJS, 77, 119). To
@@ -734,33 +747,33 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
     for sline in strong_line:
         if faintObj == True: 
             if sline == "nw":
-                s = 3.0
+                s = widths_faintObj[0]
             elif sline == "no":
-                s = 5.0
+                s = widths_faintObj[1]
             elif sline == "weak":
-                s = 7.0
+                s = widths_faintObj[2]
             elif sline == "medium":
-                s = 12.0
+                s = widths_faintObj[3]
             elif sline == "yes":
-                s = 18.0
+                s = widths_faintObj[4]
             elif sline == "super":
-                s = 22.0
+                s = widths_faintObj[5]
             elif sline == "Halpha":
                 s = Halpha_width
             width.append(s)
         else:
             if sline == "nw":
-                s = 4.0
+                s = widths_strongObj[0]
             elif sline == "no":
-                s = 7.5
+                s = widths_strongObj[1]
             elif sline == "weak":
-                s = 10.0
+                s = widths_strongObj[2]
             elif sline == "medium":
-                s = 15.0
+                s = widths_strongObj[3]
             elif sline == "yes":
-                s = 21.0
+                s = widths_strongObj[4]
             elif sline == "super":
-                s = 25.0
+                s = widths_strongObj[5]
             elif sline == "Halpha":
                 s = Halpha_width
             width.append(s)
