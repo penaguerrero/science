@@ -5,8 +5,10 @@
 #            forbidden
 #                 how forbidden
 #                       transition
-#                             strong line (nw[no and weak]=4A, no=7, weak[weak for strong lines]=10, medium=15, yes=22, super=35)
-#                                          Special width for Halpha = variable
+#                             strong line (nw[no and weak], no, weak[weak for strong lines], medium, yes, super)
+#                                          Special width for Halpha = variable object by object
+# widths_faintObj = 3.0, 5.0, 7.0, 12.0, 18.0, 22.0
+# widths_strongObj = 4.0, 7.5, 10.0, 15.0, 21.0, 25.0
 # ALL THE COMENTED LINES ARE COMENTED BECAUSE THE RESOLUTION IN THIS CASE IS NOT ENOUGH
 1157.19	C	1	no	NA	NA	nw
 1168.6	N	4	no	NA	NA	nw
@@ -99,10 +101,10 @@
 1908.73	C	3	yes	semi	NA	nw
 1908.0000	C	3	yes	semi	NA	weak
 1922.79	Fe	3	no	NA	NA	nw
-1923.01	Fe	3	no	NA	NA	nw
+#1923.01	Fe	3	no	NA	NA	nw
 1923.88	Fe	3	no	NA	NA	nw
-1924.53	Fe	3	no	NA	NA	nw
-1926.04	Fe	3	no	NA	NA	nw
+#1924.53	Fe	3	no	NA	NA	nw
+#1926.04	Fe	3	no	NA	NA	nw
 1926.3	Fe	3	no	NA	NA	nw
 1930.39	Fe	3	no	NA	NA	nw
 1931.51	Fe	3	no	NA	NA	nw
