@@ -300,16 +300,27 @@ def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, o
         # Normalize to that continuum if norm=True
         print 'Continuum calculated. Normalization to continuum was set to: ', normalize
     if (normalize == True) and (plot == True):
-        norm_flux = object_spectra[1] / fitted_continuum[1]
+        #before_norm = []
+        norm_flux = numpy.array([])
+        for i in range(len(corr_wf[1])):
+            nf = numpy.abs(corr_wf[1][i]) / numpy.abs(fitted_continuum[1][i])
+            if corr_wf[1][i] < 0.0:
+                nf = -1 * nf
+            print corr_wf[0][i], 'flux=', corr_wf[1][i], '   cont=',fitted_continuum[1][i], '   norm=', nf
+            norm_flux = numpy.append(norm_flux, nf)
+            #f = nf * numpy.abs(fitted_continuum[1][i])   # back to non-normalized fluxes
+            #before_norm.append(f)
         norm_wf = numpy.array([wf[0], norm_flux])
         # Give the theoretical continuum for the line finding
-        norm_continuum = theo_cont(object_spectra[0])
+        norm_continuum = theo_cont(corr_wf[0])
         pyplot.title(object_name)
         pyplot.suptitle('z-corrected spectra')
         pyplot.xlabel('Wavelength [$\AA$]')
         pyplot.ylabel('Normalized Flux')    
         pyplot.plot(norm_wf[0], norm_wf[1], 'b', norm_continuum[0], norm_continuum[1], 'r')
         pyplot.show()
+        #pyplot.plot(norm_wf[0], before_norm, 'g')
+        #pyplot.show()
         return norm_wf, norm_continuum, err_fit
     else:
         return corr_wf, fitted_continuum, err_fit
@@ -560,6 +571,7 @@ def gather_specs(text_file_list, name_out_file, reject=0.0, start_w=None, create
             print >> txt_file,  ('{:<12} {:<12} {:>10} {:<4} {:<9} {:>8} {:<9} {:<12} {:<10} {:<7} {:<12} {:<7} {:<6} {:<6}'.format('# Catalog WL', 'Observed WL', 'Element', 'Ion', 'Forbidden', 'HowForb', 'Width[A]', 'Flux [cgs]', 'FluxErr', '%Err', 'Continuum [cgs]', 'EW [A]', 'EWErr', '%Err'))
             for cw, w, e, i, fd, h, s, F, Fe, C, ew, ewe in zip(accepted_cols_in_file[0], accepted_cols_in_file[1], accepted_cols_in_file[2], accepted_cols_in_file[3], accepted_cols_in_file[4], 
                                                        accepted_cols_in_file[5], accepted_cols_in_file[6], accepted_cols_in_file[7], accepted_errs[0], accepted_cols_in_file[8], accepted_cols_in_file[9], accepted_errs[1]):
+                #print cw, w, e, i, fd, h, s, F, Fe, C, ew, ewe
                 Fep = (Fe * 100.) / numpy.abs(F)
                 ewep = (ewe * 100.) / numpy.abs(ew)
                 print >> txt_file,  ('{:<12.3f} {:<12.3f} {:>10} {:<6} {:<8} {:<8} {:<6} {:>12.3e} {:>10.3e} {:>6.1f} {:>13.3e} {:>10.3f} {:>6.3f} {:>6.1f}'.format(cw, w, e, i, fd, h, s, F, Fe, Fep, C, ew, ewe, ewep))
@@ -818,8 +830,6 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
                 line_width = 5.0 
             lower_wav = central_wavelength - (line_width/2)
             upper_wav = central_wavelength + (line_width/2)
-            print '\n Looking for ',  line_looked_for #***
-            print 'This is the closest wavelength in the data to the target line: ', nearest2line
             if do_errs != None:
                 F, C, err_F, ew, lolim, uplim, err_ew = get_net_fluxes(object_spectra, continuum, line_looked_for, lower_wav, upper_wav, do_errs=err_lists)
                 errs_net_fluxes.append(err_F)
@@ -829,13 +839,15 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             final_width = float(uplim - lolim)
             final_width = numpy.round(final_width, decimals=1)
             central_wavelength = float((uplim+lolim)/2.0)
-            print 'center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew
-            print 'center=', central_wavelength,'  Flux=',F, '  ew=', ew, '  from ', lolim, '  to ', uplim
-            #if line_looked_for ==  4861.33:
+            #print '\n Looking for ',  line_looked_for #***
+            #print 'This is the closest wavelength in the data to the target line: ', nearest2line
+            #print 'center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew
+            #print 'center=', central_wavelength,'  Flux=',F, '  ew=', ew, '  from ', lolim, '  to ', uplim
+            #if line_looked_for >= 5260.0:
                 #line_wavs = object_spectra[0][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
                 #line_flxs = object_spectra[1][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
                 #deblend_line(line_wavs, line_flxs, final_width, C, F, ew, plot_fit=True)
-                #raw_input()
+            #    raw_input()
             #if line_looked_for ==  4650.0:
             #    raw_input()
             width_list.append(final_width)
@@ -1426,7 +1438,8 @@ def find_EW(data_arr, cont_arr, line_looked_for, low, upp, do_errs=None):
         if lf < 0.0:
             nf = nf * -1
         norm_flx.append(nf)
-        #print 'normalization at ', lw, nf, '  Flux=', lf, '  Continuum=', cf
+        if lf >= 5230.0:
+            print 'normalization at ', lw, nf, '  Flux=', lf, '  Continuum=', cf, raw_input()
     # According to the appropriate type of line, find the peak
     positive_fluxes = []
     negative_fluxes = []
@@ -1436,6 +1449,10 @@ def find_EW(data_arr, cont_arr, line_looked_for, low, upp, do_errs=None):
         else:
             negative_fluxes.append(f)
     print 'lengths of positive_fluxes and negative_fluxes', len(positive_fluxes), len(negative_fluxes)
+    if len(positive_fluxes) == 0.0:
+        line_is_emission = False
+    if len(negative_fluxes) == 0.0:
+        line_is_emission = True
     if line_is_emission:
         peak_flx = max(positive_fluxes)
     else:
