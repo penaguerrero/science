@@ -7,8 +7,8 @@
 #                       transition
 #                             strong line (nw[no and weak], no, weak[weak for strong lines], medium, yes, super)
 #                                          Special width for Halpha = variable object by object
-# widths_faintObj = 3.0, 5.0, 7.0, 12.0, 18.0, 22.0
-# widths_strongObj = 4.0, 7.5, 10.0, 15.0, 21.0, 25.0
+# widths_faintObj = 3.0, 5.0, 7.0, 10.0, 15.0, 18.0
+# widths_strongObj = 4.0, 7.5, 10.0, 13.0, 18.0, 22.0
 # ALL THE COMENTED LINES ARE COMENTED BECAUSE THE RESOLUTION IN THIS CASE IS NOT ENOUGH
 1157.19	C	1	no	NA	NA	nw
 1168.6	N	4	no	NA	NA	nw
@@ -213,8 +213,8 @@
 3711.97	H	1	no	NA	H15	no
 #3721.94	H	1	no	NA	H14	no
 #3721.94	S	3	yes	total	F2	no
-3726.03	O	2	yes	total	F1	weak
-3728.82	O	2	yes	total	F1	weak
+3726.03	O	2	yes	total	F1	no
+3728.82	O	2	yes	total	F1	no
 3727.0000	O	2	yes	total	NA	yes
 3734.37	H	1	no	NA	H13	no
 3750.15	H	1	no	NA	H12	no
@@ -273,7 +273,7 @@
 #4097.33	N	3	no	NA	1	no
 #4098.24	O	2	no	NA	46a	no
 #4098.24	H	1	no	NA	Gal	no
-4101.74	H	1	no	NA	H6	medium
+4101.74	H	1	no	NA	H6	no
 #4107.07	O	2	no	NA	47	no
 #4108.75	O	2	no	NA	48	no
 4110.78	O	2	no	NA	20	no
@@ -329,7 +329,7 @@
 4349.43	O	2	no	NA	2	no
 4351.81	Fe	2	yes	total	0.0331	no
 4359.34	Fe	2	yes	total	F7	no
-4363.21	O	3	yes	total	F2	weak
+4363.21	O	3	yes	total	F2	no
 #4364.73	S	3	no	NA	7	no
 #4366.89	O	2	no	NA	2	no
 #4368.25	O	1	no	NA	5	no
@@ -387,7 +387,7 @@
 4667.0000	Fe	3	yes	total	F3	no
 4673.73	O	2	no	NA	1	no
 4676.24	O	2	no	NA	1	no
-4686.0000	He	2	no	NA	NA	weak
+4686.0000	He	2	no	NA	NA	no
 4696.35	O	2	no	NA	1	no
 4701.62	Fe	3	yes	total	F3	no
 4703.18	O	2	no	NA	0.04	no
@@ -480,7 +480,7 @@
 #6556.06	O	2	no	NA	113	no
 6562.82	H	1	no	NA	H3	Halpha
 6565.00 sum deblend of N2Halpha Halpha
-#6578.05	C	2	no	NA	2	no
+6578.05	C	2	no	NA	2	no
 6583.41	N	2	yes	total	F1	medium
 6591.06	0.0255	0.0144	no	NA	20	no
 6622.05	C	2	no	NA	0.0142	no
