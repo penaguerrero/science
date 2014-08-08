@@ -97,8 +97,8 @@
 1883.00	Si	3	yes	semi	NA	nw
 1892.03	Si	3	yes	semi	NA	nw
 1901.77	Fe	2	no	NA	NA	nw
-1906.68	C	3	yes	semi	NA	nw
-1908.73	C	3	yes	semi	NA	nw
+1906.68	C	3	yes	semi	NA	no
+1908.73	C	3	yes	semi	NA	no
 1908.0000	C	3	yes	semi	NA	weak
 1922.79	Fe	3	no	NA	NA	nw
 #1923.01	Fe	3	no	NA	NA	nw
@@ -124,7 +124,8 @@
 2026.27	Cr	2	no	NA	NA	nw
 2026.48	Mg	1	no	NA	NA	nw
 2056.25	Cr	2	no	NA	NA	nw
-2140.0000	N	2	yes	semi	NA	nw
+#2142.0000	N	2	yes	semi	NA	nw
+2144.0000	N	2	yes	semi	NA	nw
 2163.61	C	3	no	NA	NA	nw
 2249.88	Fe	2	no	NA	NA	nw
 2260.78	Fe	2	no	NA	NA	nw
