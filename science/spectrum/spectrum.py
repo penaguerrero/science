@@ -826,6 +826,12 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             # according to the strength of the line
             central_wavelength = object_spectra[0][(object_spectra[0] == nearest2line)]
             line_width = lines_catalog[7][i]
+            round_line_looked_for = numpy.round(line_looked_for, decimals=0)
+            if (round_line_looked_for == 1907.0) or (round_line_looked_for == 1909.0):
+                if faintObj:
+                    line_width = 3.0
+                else:
+                    line_width = 7.5
             if (line_looked_for ==  4267.15) or (line_looked_for == 4640.0) or (line_looked_for == 4650.0):
                 line_width = 5.0 
             lower_wav = central_wavelength - (line_width/2)
@@ -839,16 +845,16 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             final_width = float(uplim - lolim)
             final_width = numpy.round(final_width, decimals=1)
             central_wavelength = float((uplim+lolim)/2.0)
-            #print '\n Looking for ',  line_looked_for #***
-            #print 'This is the closest wavelength in the data to the target line: ', nearest2line
-            #print 'center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew
+            print '\n Looking for ',  round_line_looked_for #***
+            print 'This is the closest wavelength in the data to the target line: ', nearest2line
+            print 'center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew
             #print 'center=', central_wavelength,'  Flux=',F, '  ew=', ew, '  from ', lolim, '  to ', uplim
             #if line_looked_for >= 5260.0:
                 #line_wavs = object_spectra[0][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
                 #line_flxs = object_spectra[1][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
                 #deblend_line(line_wavs, line_flxs, final_width, C, F, ew, plot_fit=True)
             #    raw_input()
-            #if line_looked_for ==  4650.0:
+            #if (round_line_looked_for == 1907.0) or (round_line_looked_for == 1909.0):
             #    raw_input()
             width_list.append(final_width)
             central_wavelength_list.append(central_wavelength)
