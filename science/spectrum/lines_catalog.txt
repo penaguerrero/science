@@ -486,7 +486,7 @@
 6591.06	0.0255	0.0144	no	NA	20	no
 6622.05	C	2	no	NA	0.0142	no
 6678.15	He	1	no	NA	46	weak
-6716.47	S	2	yes	total	F2	medium
+6716.47	S	2	yes	total	F2	yes
 6730.85	S	2	yes	total	F2	yes
 6734.0000	C	2	no	NA	132	no
 6733.9	Cr	4	yes	total	0.0419	no
