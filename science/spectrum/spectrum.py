@@ -221,7 +221,7 @@ def clip_flux_using_modes(object_spec, window, threshold_fraction):
     clipd_arr = numpy.array([object_spec[0], clipd_fluxes_list])
     return clipd_arr
 
-def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, order=None, plot=True, z_correct=True, normalize=True, nullfirst150=True):
+def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, order=None, plot=True, z_correct=True, normalize=True, nullfirst150=True, divide_by_continuum=False):
     '''
     This function shifts the object's data to the rest frame (z=0). The function then fits a 
     continuum to the entire spectrum, omitting the lines windows (it interpolates 
@@ -303,7 +303,10 @@ def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, o
         #before_norm = []
         norm_flux = numpy.array([])
         for i in range(len(corr_wf[1])):
-            nf = numpy.abs(corr_wf[1][i]) / numpy.abs(fitted_continuum[1][i])
+            if divide_by_continuum:
+                nf = numpy.abs(corr_wf[1][i]) / numpy.abs(fitted_continuum[1][i])
+            else:
+                nf = numpy.abs(corr_wf[1][i]) - numpy.abs(fitted_continuum[1][i])
             if corr_wf[1][i] < 0.0:
                 nf = -1 * nf
             print corr_wf[0][i], 'flux=', corr_wf[1][i], '   cont=',fitted_continuum[1][i], '   norm=', nf
@@ -311,8 +314,12 @@ def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, o
             #f = nf * numpy.abs(fitted_continuum[1][i])   # back to non-normalized fluxes
             #before_norm.append(f)
         norm_wf = numpy.array([wf[0], norm_flux])
-        # Give the theoretical continuum for the line finding
-        norm_continuum = theo_cont(corr_wf[0])
+        # Give the theoretical continuum for the line finding, use scaling_factor=1.0 for division 
+        if divide_by_continuum: 
+            scale_factor = 1.0
+        else:
+            scale_factor = 0.0
+        norm_continuum = theo_cont(corr_wf[0], scale_factor=scale_factor)
         pyplot.title(object_name)
         pyplot.suptitle('z-corrected spectra')
         pyplot.xlabel('Wavelength [$\AA$]')
