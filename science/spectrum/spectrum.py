@@ -839,10 +839,15 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
                     line_width = 3.0
                 else:
                     line_width = 7.5
+                central_wavelength = 1907.05
+                lower_wav = central_wavelength - (line_width/2) - 7.0
+                upper_wav = central_wavelength + (line_width/2) + 4.0
             if (line_looked_for ==  4267.15) or (line_looked_for == 4640.0) or (line_looked_for == 4650.0):
                 line_width = 5.0 
-            lower_wav = central_wavelength - (line_width/2)
-            upper_wav = central_wavelength + (line_width/2)
+            else:
+                lower_wav = central_wavelength - (line_width/2)# - 7.0
+                upper_wav = central_wavelength + (line_width/2)# + 4.0
+            print '*** Initial values:     lower = ', lower_wav, '   upper = ', upper_wav
             if do_errs != None:
                 F, C, err_F, ew, lolim, uplim, err_ew = get_net_fluxes(object_spectra, continuum, line_looked_for, lower_wav, upper_wav, do_errs=err_lists)
                 errs_net_fluxes.append(err_F)
@@ -856,14 +861,23 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             print 'This is the closest wavelength in the data to the target line: ', nearest2line
             print 'center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew
             print 'center=', central_wavelength,'  Flux=',F, '  ew=', ew, '  from ', lolim, '  to ', uplim
-            #if (round_line_looked_for == 1907.0) or (round_line_looked_for == 1909.0):
-            #    raw_input()
+            if (round_line_looked_for == 1906.0) or (round_line_looked_for == 1909.0):
+                lolim = lolim - 7.0
+                uplim = uplim + 4.0
+                line_wavs = object_spectra[0][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
+                line_flxs = object_spectra[1][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
+                line_arr = [line_wavs, line_flxs]
+                lines2deblend = [1901, 1907]
+                deblend_line(object_spectra, line_arr, C, lines2deblend, plot_fit=True)
+                raw_input()
             #if (round_line_looked_for == 5007):
             #    raw_input()
-            #if line_looked_for >= 5260.0:
-                #line_wavs = object_spectra[0][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
-                #line_flxs = object_spectra[1][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
-                #deblend_line(line_wavs, line_flxs, final_width, C, F, ew, plot_fit=True)
+            #if line_looked_for >= 3727.0:
+            #    line_wavs = object_spectra[0][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
+            #    line_flxs = object_spectra[1][(object_spectra[0] >= lolim) & (object_spectra[0] <= uplim)]
+            #    line_arr = [line_wavs, line_flxs]
+            #    lines2deblend = [3731, 3726, 3729]
+            #    deblend_line(object_spectra, line_arr, C, lines2deblend, plot_fit=True)
             #    raw_input()
             width_list.append(final_width)
             central_wavelength_list.append(central_wavelength)
@@ -1638,164 +1652,105 @@ def fill_arr2limit(x, y, ylimit, fromX, toX, resolution_of_spectra):
     '''
     return newx, newy, newc
     
-def deblend_line(object_spectra, contum_spectra, catal_wavelengths, obs_wavelengths, tot_flx, tot_cont, lines2deblend, width_of_lines, plot_fit=False):
-    '''This function deblends the input line. IT WAS PROGRAMED FOR EMISSION LINES! 
-    lines2deblen = list of the central wavelengths that compose the blend
-    width_of_lines = width of the componing lines (is the same for all the components of the blend)
+    
+def deblend_line(obj_spec, line_arr, cont_value, lines2deblend, plot_fit=False):
+    '''This function deblends the input line. IT WAS PROGRAMED FOR EMISSION LINES, so it uses gaussians! 
+    obj_spec = array of all the observed wavelengths and fluxes
+    line_arr = array of the line wavelengths and fluxes
+    cont_value = continuum center for the line
+    lines2deblend = list of the central wavelengths that compose the blend ( number of wavs: min=2, max=3)
     if plot_fit = True, the function shows plot of deblend.'''
-    midwav = sum(lines2deblend) / float(len(lines2deblend))
-    print 'lines2deblend:', lines2deblend
-    print 'midwav = ', midwav
-    width = width_of_lines + 6.0    # this adds 3 A from each side to "give room" for the fit 
-    lolim = midwav - width/2.0
-    uplim = midwav + width/2.0
-    resolution_of_spectra = 3.0
-    inix, iniy, _ = fill_arr2limit(object_spectra[0], object_spectra[1], contum_spectra[1], lolim, uplim, resolution_of_spectra)
-    # Determine the arrays for the lines , as well as the total flux, continuum, equivalent width
-    gaussfits = []
-    acoeff = []
-    sigmas = []
-    xs = []
-    ys = []
-    diff = 0.0
-    norm_constant =  1.0e-15
-    for line in lines2deblend:
-        print 'line and width:', line, width_of_lines
-        if line in catal_wavelengths:
-            obsline_idx = catal_wavelengths.index(line)
-            obsline = obs_wavelengths[obsline_idx]
-            lolim = obsline - width/2.0
-            uplim = obsline + width/2.0
-            print 'center, lolim, uplim:', obsline, lolim, uplim
-            x, y, _ = fill_arr2limit(object_spectra[0], object_spectra[1], contum_spectra[1], lolim, uplim, resolution_of_spectra)
-            fromX = obsline - width_of_lines/2.0
-            toX = obsline + width_of_lines/2.0
-            newx = x[(x >= fromX) & (x <= toX)]
-            newy = y[(x >= fromX) & (x <= toX)]
-            xs.append(newx)
-            ys.append(newy)
-            newy = newy / norm_constant # Normalizing the flux to avoid computing problems
-            a = 1.0                     # first guess
-            p0 = [a, line, 1.5]         # p0 is the initial guess for the fitting coefficients (a, mean, and sigma)
-            coeff, _ = optimize.curve_fit(gaus_function, newx, newy, p0)
-            print 'coeffs: a, mean, sigma =', coeff
-            acoeff.append(coeff[0])
-            sigmas.append(coeff[-1]) 
-            p = [coeff[0], coeff[1]+diff, coeff[-1]]
-            diff = lines2deblend[1] - lines2deblend[0]           
-            gf = gaus_function(x, *p) * 1.0e-15
-            gaussfits.append(gf)
-            if plot_fit:
-                pyplot.plot(x, gf,'b:',label='initial guess')
-    # Sum the initial gaussians
-    p0 = [acoeff[0], acoeff[1], lines2deblend[0], lines2deblend[1], sigmas[0], sigmas[1]]
-    iniy = iniy / norm_constant
-    coeffini, _ = optimize.curve_fit(gauss_sum, inix, iniy, p0=p0)
-    y_initsum = gauss_sum(inix, coeffini[0], coeffini[1], lines2deblend[0], lines2deblend[1], sigmas[0], sigmas[1]) * norm_constant
-    #y_initsum = gaus_function(inix, acoeff[0], lines2deblend[0], sigmas[0])*norm_constant + gaus_function(inix, acoeff[1], lines2deblend[1], sigmas[1])*norm_constant
-    print 'coeffini, y_initsum', coeffini[0], coeffini[1], y_initsum
-    pyplot.plot(inix, y_initsum,'b-.',label='initial guess')
-    initial_param4residuals = numpy.array(p0)
-    plsq = optimize.leastsq(residuals, p0[:], args=(inix, iniy))
-    print plsq
-    # Determine the estimate
-    y1 = gaus_function(xs[0], plsq[0][0], plsq[0][2], plsq[0][4]) * norm_constant
-    y2 = gaus_function(xs[1], plsq[0][1], plsq[0][3], plsq[0][5]) * norm_constant
-    y_est = gaus_function(inix, plsq[0][0], plsq[0][2], plsq[0][4])*norm_constant + gaus_function(inix, plsq[0][1], plsq[0][3], plsq[0][5])*norm_constant
-    # Return values to original state
-    iniy = iniy * norm_constant
-    if plot_fit:
-        pyplot.plot(object_spectra[0], object_spectra[1],'k:',label='data')
-        pyplot.plot(contum_spectra[0], contum_spectra[1],'r:',label='continuum')
-        pyplot.plot(inix, iniy,'k')
-        pyplot.plot(xs[0], y1,'c--',label='line1')
-        pyplot.plot(xs[1], y2,'m--',label='line2')
-        pyplot.plot(inix, y_est,'g--',label='sum')
-        pyplot.xlim(lolim-25.0, uplim+25.0)
-        pyplot.ylim(0.0, 2.5e-15)
-        #pyplot.ylim(tot_flx-(tot_flx*0.3), tot_flx+(tot_flx*0.1))
-        pyplot.legend()
-        pyplot.title('Line deblend with Gaussian Fit')
-        pyplot.xlabel('Wavelength  [$\AA$]')
-        pyplot.ylabel('Flux  [ergs/s/cm$^2$/$\AA$]')
-        pyplot.show()
-    #return 
+    # Create the array for the continuum
+    cont_arr = theo_cont(line_arr[0], scale_factor=cont_value)
+    elements = 100
+    wavelength, fx, _, flux_cont = fill_EWarr(line_arr, cont_arr, line_arr[0][0], line_arr[0][-1], elements)
+    flux = fx - flux_cont
+    # fit the line with a gaussian
+    #gf, _ = fit_gauss(wavelength, flux)
+    # Determine the number of centers for the deblend
+    mean1, mean2, mean3 = lines2deblend[0], lines2deblend[1], None
+    if len(lines2deblend) == 3:
+        mean3 = lines2deblend[2]
+    gsum, indiv_fits = fit_multi_gauss(wavelength, flux, mean1, mean2, mean3)
+    gsum = gsum + flux_cont
+    for idx, _ in enumerate(indiv_fits):
+        indiv_fits[idx] = indiv_fits[idx] + flux_cont
+    pyplot.title('Line deblend with Gaussian Fit')
+    pyplot.xlabel('Wavelength  [$\AA$]')
+    pyplot.ylabel('Flux  [ergs/s/cm$^2$/$\AA$]')
+    pyplot.xlim(line_arr[0][0]-20.0, line_arr[0][-1]+20.0)
+    ylo = min(line_arr[1]) - min(line_arr[1])*0.12
+    yup = max(line_arr[1]) + max(line_arr[1])*0.12
+    pyplot.ylim(ylo, yup)
+    pyplot.plot(obj_spec[0], obj_spec[1], 'k')
+    pyplot.plot(wavelength, fx, 'b')
+    #pyplot.plot(wavelength, gf, 'r')
+    pyplot.plot(wavelength, gsum, 'r--')
+    pyplot.plot(wavelength, indiv_fits[0], 'c--')
+    pyplot.plot(wavelength, indiv_fits[1], 'c--')
+    if len(lines2deblend) == 3:
+        pyplot.plot(wavelength, indiv_fits[2], 'c--')
+    pyplot.plot(wavelength, flux_cont, 'g')
+    pyplot.show()
+
 
 #### Gaussian fit
-def gaus_function(x, norm, meanX, sig):
-    '''This function finds the gaussian y corresponding point.
-    x = array of x-values
-    RETURNS: array of y-values '''
-    a = norm/(sig*numpy.sqrt(2*numpy.pi))
-    return a * numpy.exp(-(x-meanX)**2 / (2.0*sig**2))
+def gauss(x, a, meanX, sig):
+    return a*stats.norm.pdf(x, loc=meanX, scale=sig)
 
-def gauss_sum(x, norm1, norm2, mean1, mean2, sig1, sig2):
-    '''This function finds the sum of 2 gaussians.
-    x = array of x-values
-    RETURNS: y-point in gaussian '''
-    norm = norm1 * norm2
-    a = norm/numpy.sqrt(2.0*numpy.pi*(sig1**2 + sig2**2))    
-    xtot = x + x
-    return a * numpy.exp(-(xtot-(mean1+mean2))**2 / (2.0*(sig1**2 + sig2**2)))
-
-def gaus_fit(x, y):
+def fit_gauss(x, y):
     sig, mean = find_std(x)
     # p0 is the initial guess for the fitting coefficients (mean and sigma)
-    norm = 0.5 # initial guess
-    p0 = [norm, mean, sig]
-    coeff, _ = optimize.curve_fit(gaus_function, x, y, p0=p0)
-    gf = gaus_function(x, *coeff)
-    #print 'these are the coefficients:  norm=', coeff[0], '  mean=', coeff[1], '  sigma=', coeff[2]
+    a = 0.2 # initial guess
+    p0 = [a, mean, sig]
+    coeff, _ = optimize.curve_fit(gauss, x, y, p0=p0)
+    gf = gauss(x, *coeff)
+    print 'these are the coefficients:  norm=', coeff[0], '  mean=', coeff[1], '  sigma=', coeff[2]
     return gf, sig
 
-def residuals(p, y, x):
-    n1, n2, m1, m2, sd1, sd2 = p
-    y_fit = gaus_function(x, n1, m1, sd1) + gaus_function(x, n2, m2, sd2)
-    err = y - y_fit
+def multi_gauss(x, *args):
+    '''
+    This function fits 2 or 3 gaussians to the given array of wavelength.
+    '''
+    l = len(args)
+    if l == 6:
+        m1, m2, s1, s2, a1, a2 = args
+    elif l == 9:
+        m1, m2, m3, s1, s2, s3, a1, a2, a3 = args
+    ret = gauss(x, a1, m1, s1)
+    ret += gauss(x, a2, m2, s2)
+    if l == 9:
+        ret += gauss(x, a3, m3, s3)
+    return ret
+
+def fit_multi_gauss(x, y, m1, m2, m3=None):
+    '''
+    This function finds the best fits 2 or 3 gaussians to the given array of wavelength.
+    '''
+    s1, s2, s3, a1, a2, a3 = 1.0, 1.0, 1.0, 3.0e-16, 3.0e-16, 3.0e-16
+    m1, m2 = float(m1), float(m2)
+    p0 = [m1, m2, s1, s2, a1, a2]
+    if m3 != None:
+        m3 = float(m3)
+        print m1, m2, m3
+        p0 = [m1, m2, m3, s1, s2, s3, a1, a2, a3]
+    coeffs, _ = optimize.curve_fit(multi_gauss, x, y, p0=p0)
+    mg = multi_gauss(x, *coeffs)
+    print 'these are the coefficients:  ', coeffs
+    g1 = gauss(x, coeffs[4], coeffs[0], coeffs[2])
+    g2 = gauss(x, coeffs[5], coeffs[1], coeffs[3])
+    indiv_fits = [g1, g2]
+    if m3 != None:
+        g1 = gauss(x, coeffs[6], coeffs[0], coeffs[3])
+        g2 = gauss(x, coeffs[7], coeffs[1], coeffs[4])
+        g3 = gauss(x, coeffs[8], coeffs[2], coeffs[5])
+        indiv_fits = [g1, g2, g3]
+    return mg, indiv_fits
+
+def residuals(orig_yarr, fitted_yarr):
+    err = orig_yarr - fitted_yarr
     return err
   
-def deblend_with_gauss(object_spectra, contum_spectra, catal_wavelengths, obs_wavelengths, tot_flx, tot_cont, lines2deblend, width_of_lines, plot_fit=False):
-    # to "simplify" the data, its zero will be the continuum and it will not consider adyacent lines
-    width = width_of_lines + 5.0    # this adds 2.5 A from each side to "give room" for the fit 
-    for line in lines2deblend:
-        print 'line and width:', line, width
-        if line in catal_wavelengths:
-            obsline_idx = catal_wavelengths.index(line)
-            obsline = obs_wavelengths[obsline_idx]
-            lolim = obsline - width/2.0
-            uplim = obsline + width/2.0
-            print 'center, lolim, uplim:', obsline, lolim, uplim
-            nearest2lolim, _ = find_nearest(object_spectra[0], lolim)
-            nearest2uplim, _ = find_nearest(object_spectra[0], uplim)
-            x = object_spectra[0][(object_spectra[0] >= nearest2lolim) & (object_spectra[0] <= nearest2uplim)]
-            y = object_spectra[1][(object_spectra[0] >= nearest2lolim) & (object_spectra[0] <= nearest2uplim)]
-            line_cont = contum_spectra[1][(contum_spectra[0] >= nearest2lolim) & (contum_spectra[0] <= nearest2uplim)]
-    # Remove the "irrelevant" information
-    for i in range(len(y)):
-        y[i] = y[i] - line_cont[i]
-    # Initial conditions
-    #mainline = (lines2deblend[0] + lines2deblend[1])/2.0
-    mean1, mean2, sig1, sig2 = [lines2deblend[0], lines2deblend[1], 1.0, 1.0] 
-    param = [mean1, mean2, sig1, sig2]
-    y_init = gaus_function(x, mean1, sig1) + gaus_function(x, mean2, sig2)
-    p = [lines2deblend[0], lines2deblend[1], sig1, sig1]
-    plsq = optimize.leastsq(residuals, param, args=(y, x))
-    # Determine the estimate
-    y_est = gaus_function(x, plsq[0][0], plsq[0][2]) + gaus_function(x, plsq[0][0] + plsq[0][1], plsq[0][3])
-    for i in range(len(y_est)):
-        y_est[i] = y_est[i] + line_cont[i]
-    if plot_fit:
-        pyplot.plot(object_spectra[0], object_spectra[1],'k',label='data')
-        pyplot.plot(contum_spectra[0], contum_spectra[1],'r:',label='continuum')
-        pyplot.plot(x, y_init, 'g--', label='Starting Guess')
-        pyplot.plot(x, y_est, 'b--', label='Fitted')
-        pyplot.xlim(lolim-50.0, uplim+50.0)
-        pyplot.ylim((tot_flx*0.1)-tot_flx, tot_flx+(tot_flx*0.1))
-        pyplot.legend()
-        pyplot.title('Line deblend with Gaussian Fit')
-        pyplot.xlabel('Wavelength  [$\AA$]')
-        pyplot.ylabel('Flux  [ergs/s/cm$^2$/$\AA$]')
-        pyplot.show()
     
 #### Full width half maximum 
 def FWHM(sig):
