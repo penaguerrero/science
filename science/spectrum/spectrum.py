@@ -870,24 +870,24 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
                 lines2deblend = [1901, 1906, 1909]
                 line_wav, line_fx, line_fx_cont, gsum, indiv_fits = deblend_line(object_spectra, line_arr, C, lines2deblend, plot_fit=True)
                 # Flux for the full line
-                Flx_info = get_flux_norecenter(central_wavelength, gsum, line_fx_cont, do_errs=do_errs)
+                Flx_info = get_flux_norecenter(central_wavelength, line_wav, gsum, line_fx_cont, do_errs=do_errs)
                 # fit individual lines
-                fit1_info = get_flux_norecenter(lines2deblend[0], indiv_fits[0], line_fx_cont, do_errs=do_errs)
-                fit2_info = get_flux_norecenter(lines2deblend[1], indiv_fits[1], line_fx_cont, do_errs=do_errs)
+                fit1_info = get_flux_norecenter(lines2deblend[0], line_wav, indiv_fits[0], line_fx_cont, do_errs=do_errs)
+                fit2_info = get_flux_norecenter(lines2deblend[1], line_wav, indiv_fits[1], line_fx_cont, do_errs=do_errs)
                 if len(lines2deblend) == 3:
-                    fit3_info = get_flux_norecenter(lines2deblend[2], indiv_fits[2], line_fx_cont, do_errs=do_errs)
+                    fit3_info = get_flux_norecenter(lines2deblend[2], line_wav, indiv_fits[2], line_fx_cont, do_errs=do_errs)
                 if do_errs != None:
                     F, C, err_F, ew, linecenter, err_ew = Flx_info
                     F1, C1, err_F1, ew1, linecenter1, err_ew1 = fit1_info
                     F2, C2, err_F2, ew2, linecenter2, err_ew2 = fit2_info
                     if len(lines2deblend) == 3:
-                        F3, C3, err_F3, ew3, linecenter3, err_ew3 = fit2_info
+                        F3, C3, err_F3, ew3, linecenter3, err_ew3 = fit3_info
                 else:
                     F, C, err_F, ew, linecenter = Flx_info
                     F1, C1, err_F1, ew1, linecenter1 = fit1_info
                     F2, C2, err_F2, ew2, linecenter2 = fit2_info
                     if len(lines2deblend) == 3:
-                        F3, C3, err_F3, ew3, linecenter3 = fit2_info
+                        F3, C3, err_F3, ew3, linecenter3 = fit3_info
                 print 'Gaussian fits:'
                 print 'center1=', linecenter1,'  Flux+-err=',F1, err_F1,  '  ew=', ew1
                 print 'center2=', linecenter2,'  Flux+err=',F2, err_F2,  '  ew=', ew2
@@ -1045,31 +1045,41 @@ def get_net_fluxes(object_spectra, continuum, line_looked_for, lower_wav, upper_
             n = -1
         err_perc = do_errs[1][n]/continuum[1][n]  #this gets the percentage error of the continuum
         errC = C * err_perc
-        err_F =  numpy.sqrt( F**2*( (err_ew/ew)**2 + (errC/C)**2 - 2*((err_ew*errC)**2/(ew*C)) ))
+        err_F = F * numpy.sqrt( ( (err_ew/ew)**2 + (errC/C)**2 - 2*((err_ew*errC)**2/(ew*C)) ))
         #print 'F, err_F, C, errC, err_perc', F, err_F, C, errC, err_perc
         return F, C, err_F, ew, lower_wav, upper_wav, err_ew
     else:
         return F, C, ew, lower_wav, upper_wav
 
-def get_flux_norecenter(line_center, line_flux, linecont_flux, do_errs=None):
+def get_flux_norecenter(line_center, line_wav, line_flux, linecont_flux, do_errs=None):
     '''This function gets the integrated flux at the given point without recentering the line.'''
     # Actually solving the eqw integral
-    dlambda = 1.0
+    diffwav = []
+    for i in range(1, len(line_wav)):
+        d = line_wav[i] - line_wav[i-1]
+        diffwav.append(d)
+    dlambda = sum(diffwav)/len(diffwav)
     difference = 1 - (line_flux / linecont_flux)
     eqw = sum(difference) * dlambda * (-1)   # the -1 is because of the definition of EQW        
     if do_errs != None:
         errs_fluxes, errs_continuum = do_errs        
-        err_a = []
         err_b = []
-        for f, c, ef, ec in zip(line_flux, linecont_flux, errs_fluxes, errs_continuum):
+        errs_flx = []
+        errs_cont = []
+        for lf, lc in zip(line_flux, linecont_flux):
+            ef = errs_fluxes * lf
+            errs_flx.append(ef)
+            ec = errs_continuum * lc
+            errs_cont.append(ec)
+        for f, c, ef, ec in zip(line_flux, linecont_flux, errs_flx, errs_cont):
             # Let  a = flux / flux_cont, then error in a is
             ea = f/c * numpy.sqrt((ec/c)**2 + (ef/f)**2)
-            err_a.append(ea)
             # Let  b = 1-a, then the error**2 in b is
             eb = ea*ea
             err_b.append(eb)
         tot_err_diff = numpy.sqrt(sum(err_b))
-        err_ew = dlambda * numpy.sqrt(tot_err_diff)
+        err_ew = dlambda * tot_err_diff
+        print 'eqw, err_ew : ', eqw, err_ew
         eqw_info = [eqw, err_ew] 
     #eqw_info = EQW(line_arr, linecont_arr, lower_wav, upper_wav, do_errs=do_errs)
     if do_errs != None:
@@ -1082,14 +1092,15 @@ def get_flux_norecenter(line_center, line_flux, linecont_flux, do_errs=None):
         if line_center < 2000.:
             n = 0 #this gets the percentage error of the continuum
         elif (line_center >= 2000) and (line_center < 5000.):
-            n = int(len(do_errs[1])/2)
+            n = int(len(errs_cont)/2)
         elif line_center >= 5000.:
             n = -1
-        err_perc = do_errs[1][n]/linecont_flux[n]  #this gets the percentage error of the continuum
+        err_perc = errs_cont[n]/linecont_flux[n]  #this gets the percentage error of the continuum
         errC = C * err_perc
-        Ferr = numpy.sqrt( (err_ew/eqw)**2 + (errC/C)**2 )
+        Ferr = F * numpy.sqrt( (err_ew/eqw)**2 + (errC/C)**2 )
         return F, C, Ferr, ew, line_center, err_ew
     else:
+        Ferr = 0.0
         return F, C, Ferr, ew, line_center        
 
 def theo_cont(wave_arr, scale_factor=1.0):
