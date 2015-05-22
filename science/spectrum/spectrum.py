@@ -861,6 +861,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             print 'This is the closest wavelength in the data to the target line: ', nearest2line
             print 'center=', central_wavelength,'  initial_width=',line_width, '  final_width = %f' % final_width, '    ew=', ew
             print 'center=', central_wavelength,'  Flux=',F, '  ew=', ew, '  from ', lolim, '  to ', uplim
+            '''
             if (round_line_looked_for == 1906.0) or (round_line_looked_for == 1909.0):
                 lolim = lolim - 7.0
                 uplim = uplim + 4.0
@@ -903,6 +904,7 @@ def find_lines_info(object_spectra, continuum, Halpha_width, text_table=False, v
             #    lines2deblend = [3731, 3726, 3729]
             #     (object_spectra, line_arr, C, lines2deblend, plot_fit=True)
             #    raw_input()
+            '''
             width_list.append(final_width)
             central_wavelength_list.append(central_wavelength)
             continuum_list.append(C)
