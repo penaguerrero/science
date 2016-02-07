@@ -221,7 +221,7 @@ def clip_flux_using_modes(object_spec, window, threshold_fraction):
     clipd_arr = numpy.array([object_spec[0], clipd_fluxes_list])
     return clipd_arr
 
-def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, order=None, plot=True, z_correct=True, normalize=True, nullfirst150=True, divide_by_continuum=False):
+def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, order=None, plot=True, z_correct=True, normalize=True, nullfirst150=True, divide_by_continuum=False, lastangstroms2omit=None):
     '''
     This function shifts the object's data to the rest frame (z=0). The function then fits a 
     continuum to the entire spectrum, omitting the lines windows (it interpolates 
@@ -263,6 +263,17 @@ def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, o
                 if avg_arr[0][i] < wl:
                     avg_arr[1][i] = avgfluxfirst150
                 print avg_arr[0][i], avg_arr[1][i]
+    if lastangstroms2omit != None:
+        for i in range(len(avg_arr[1])):
+            # find wavelength nearest to last-150A
+            wl, idx = find_nearest(avg_arr[0], avg_arr[0][-1]-lastangstroms2omit)
+            # find closest flux to 0 in a small array around last wav -150A
+            avgfluxlast150 = avg_arr[1][idx]
+            small_arr_f = avg_arr[1][(avg_arr[0] >= avgfluxlast150-10)&(avg_arr[0] >= avgfluxlast150+10)]
+            flu, idx = find_nearest(small_arr_f, 0.0)
+            if avg_arr[0][i] > wl:
+                avg_arr[1][i] = flu
+            print avg_arr[0][i], avg_arr[1][i]
     if order == None:
         fitted_continuum, nth, err_fit = get_best_polyfit(avg_arr, window)
         print 'order of best fit polynomial', nth
