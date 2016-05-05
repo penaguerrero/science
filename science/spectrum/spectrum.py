@@ -221,7 +221,9 @@ def clip_flux_using_modes(object_spec, window, threshold_fraction):
     clipd_arr = numpy.array([object_spec[0], clipd_fluxes_list])
     return clipd_arr
 
-def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, order=None, plot=True, z_correct=True, normalize=True, nullfirst150=True, divide_by_continuum=False, lastangstroms2omit=None):
+def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, order=None, plot=True, z_correct=True, 
+                  normalize=True, nullfirst150=True, divide_by_continuum=False, 
+                  lastangstroms2omit=None, firstangstroms2omit=None, wins2omit=None):
     '''
     This function shifts the object's data to the rest frame (z=0). The function then fits a 
     continuum to the entire spectrum, omitting the lines windows (it interpolates 
@@ -263,6 +265,14 @@ def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, o
                 if avg_arr[0][i] < wl:
                     avg_arr[1][i] = avgfluxfirst150
                 print avg_arr[0][i], avg_arr[1][i]
+    if firstangstroms2omit != None:
+        for i in range(len(avg_arr[1])):
+            # find wavelength nearest to firstangstroms2omit
+            wl, idx = find_nearest(avg_arr[0], avg_arr[0][0]+firstangstroms2omit)
+            avgfluxfirst = avg_arr[1][idx]
+            if avg_arr[0][i] < wl:
+                avg_arr[1][i] = avgfluxfirst
+            print avg_arr[0][i], avg_arr[1][i]
     if lastangstroms2omit != None:
         for i in range(len(avg_arr[1])):
             # find wavelength nearest to last-150A
@@ -274,12 +284,30 @@ def fit_continuum(object_name, object_spectra, z, sigmas_away=3.0, window=150, o
             if avg_arr[0][i] > wl:
                 avg_arr[1][i] = flu
             print avg_arr[0][i], avg_arr[1][i]
-    if order == None:
+    if wins2omit != None:
+        # angstroms2omit is expected to be a list of wavelength ranges to omit
+        for w2o in wins2omit:
+            # find wavelength nearest to beginning and end and replace flux for average flux from before and after
+            wl0, idx0 = find_nearest(avg_arr[0], w2o[0])
+            wl1, idx1 = find_nearest(avg_arr[0], w2o[1])
+            avgfluxfirst = (avg_arr[1][idx0] + avg_arr[1][idx1] ) / 2.0
+            for i in range(len(avg_arr[1])):
+                wav = avg_arr[0][i]
+                if wav >= wl0 and wav <= wl1:
+                    avg_arr[1][i] = avgfluxfirst
+                print avg_arr[0][i], avg_arr[1][i]
+    # Obtain a line from 2 continuum points:  force_continuum = [x1, y1, x2, y2]
+    force_continuum = None#[4363.21, 1.321e-17, 5006.84, 1.249e-17]
+    if force_continuum is not None:
+        x1, y1, x2, y2 = force_continuum
+        m = (y2 - y1) / (x2 - x1)
+        avg_arr[1] = m*(avg_arr[0] - x1) + y1  
+    if order is None:
         fitted_continuum, nth, err_fit = get_best_polyfit(avg_arr, window)
         print 'order of best fit polynomial', nth
         print 'percentage of error of continuum fit = %0.2f' % err_fit
         poly_order = nth
-    elif order != None:
+    elif order is not None:
         fitted_continuum = fit_polynomial(avg_arr, order)
         avg_chi2, chi2_list, window_cont_list, err_fit = find_reduced_chi2_of_polynomial(fitted_continuum, wf, window)
         print 'avg_chi2, chi2_list'
